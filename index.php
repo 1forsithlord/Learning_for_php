@@ -10,19 +10,22 @@
 
 <body>
 
-  <h1>Registration Form</h1>
+  <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
+    <button type="button" id="show-register-form" class="btn btn-primary">Register</button>
+  </div>
 
-  <form id="registration-form" action="ajax.php" method="POST" enctype="multipart/form-data" target="_blank"
-    novalidate>
+  <div id="registration-wrapper" style="display: none;">
+    <h1>Registration Form</h1>
+
+    <form id="registration-form" action="ajax.php" method="POST" enctype="multipart/form-data" target="_blank"
+      novalidate>
     <label for="full_name">Full Name <span style="color: red;">*</span> : </label>
     <input type="text" id="full_name" name="full-name" maxlength="100" autofocus>
-    <br>
     <small id="full-name-error"></small>
     <br><br>
 
     <label for="email">Email ID <span style="color: red;">*</span> : </label>
     <input type="email" id="email" name="email" maxlength="100">
-    <br>
     <small id="email-error"></small>
     <br><br>
 
@@ -33,17 +36,15 @@
       <option value="F">Female</option>
       <option value="O">Other</option>
     </select>
-    <br>
     <small id="gender-error"></small>
     <br><br>
 
     <label for="myfile">Upload Profile Picture:</label>
     <input type="file" id="myfile" name="myfile" accept="image/jpeg, image/png, image/jpg">
-    <br>
     <small id="myfile-error"></small>
     <br><br>
 
-    <div style="width: 300px;">
+    <div style="width: 200px;">
       <label for="pwd"> Password <span style="color: red;">*</span> : </label>
       <div style="position: relative; display: inline-block; width: 100%;">
         <input type="password" id="pwd" name="pwd" maxlength="20" style="width: 100%; padding-right: 40px;">
@@ -52,7 +53,7 @@
       </div>
     </div>
 
-    <div style="width: 300px;">
+    <div style="width: 200px;">
       <label for="confirm_password">Confirm Password <span style="color: red;">*</span> : </label>
       <div style="position: relative; display: inline-block; width: 100%;">
         <input type="password" id="confirm_password" name="confirm_password" maxlength="20" style="width: 100%; padding-right: 40px;">
@@ -60,25 +61,37 @@
           style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;"></i>
       </div>
     </div>
-    <br>
     <small id="confirm_password-error"></small>
-    <br><br>
+    <br>
 
     <p>Status <span style="color: red;">*</span> :</p>
     <input type="radio" id="active" name="status" value="1" checked>
     <label for="active">Active</label>
-    <br>
     <input type="radio" id="inactive" name="status" value="0">
     <label for="inactive">Inactive</label>
-    <br>
     <small id="status-error"></small>
     <br><br>
 
-    <input type="button" value="Submit" onclick="validateForm();">
-    <input type="reset" value="Reset" onclick="clear_errors();">
-  </form>
+      <input type="button" value="Submit" onclick="validateForm();">
+      <input type="reset" value="Reset" onclick="clear_errors();">
+    </form>
+  </div>
 
   <script>
+    document.getElementById("show-register-form").addEventListener("click", function () {
+      const wrapper = document.getElementById("registration-wrapper");
+      const button = this;
+
+      if (wrapper.style.display === "none") {
+        wrapper.style.display = "block";
+        button.textContent = "Hide Form";
+        document.getElementById("full_name").focus();
+      } else {
+        wrapper.style.display = "none";
+        button.textContent = "Register";
+      }
+    });
+
     function validateForm() {
       let missingFields = [];
 

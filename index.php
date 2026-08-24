@@ -30,10 +30,24 @@ function escape($value)
   #show-register-form {
     margin-left: 5%;
   }
+
+    #toast-message {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1055;
+      display: none;
+      padding: 12px 18px;
+      color: white;
+      background-color: #198754;
+      border-radius: 4px;
+    }
 </style>
 </head>
 
 <body>
+
+  <div id="toast-message" role="status"></div>
 
  <div style="margin-top: 20px; margin-bottom: 20px;">
     <button type="button" id="show-register-form" class="btn btn-primary">Register</button>
@@ -44,16 +58,17 @@ function escape($value)
 
     <form id="registration-form" action="ajax.php" method="POST" enctype="multipart/form-data"
       novalidate >
+    <small id="full-name-error" style="color: red;"></small>
     <label for="full_name">Full Name <span style="color: red;">*</span> : </label>
     <input type="text" id="full_name" name="full-name" maxlength="100" autofocus>
-    <small id="full-name-error"></small>
     <br><br>
 
+    <small id="email-error" style="color: red;"></small>
     <label for="email">Email ID <span style="color: red;">*</span> : </label>
     <input type="email" id="email" name="email" maxlength="100">
-    <small id="email-error"></small>
     <br><br>
 
+    <small id="gender-error" style="color: red;"></small>
     <label for="gender">Gender <span style="color: red;">*</span> : </label>
     <select id="gender" name="gender">
       <option value="">Select Gender</option>
@@ -61,15 +76,15 @@ function escape($value)
       <option value="F">Female</option>
       <option value="O">Other</option>
     </select>
-    <small id="gender-error"></small>
     <br><br>
 
+    <small id="myfile-error" style="color: red;"></small>
     <label for="myfile">Upload Profile Picture:</label>
     <input type="file" id="myfile" name="myfile" accept="image/jpeg, image/png, image/jpg">
-    <small id="myfile-error"></small>
     <br><br>
 
     <div style="width: 200px;">
+      <small id="pwd-error" style="color: red;"></small>
       <label for="pwd"> Password <span style="color: red;">*</span> : </label>
       <div style="position: relative; display: inline-block; width: 100%;">
         <input type="password" id="pwd" name="pwd" maxlength="20" style="width: 100%; padding-right: 40px;">
@@ -79,6 +94,7 @@ function escape($value)
     </div>
 
     <div style="width: 200px;">
+      <small id="confirm_password-error" style="color: red;"></small>
       <label for="confirm_password">Confirm Password <span style="color: red;">*</span> : </label>
       <div style="position: relative; display: inline-block; width: 100%;">
         <input type="password" id="confirm_password" name="confirm_password" maxlength="20" style="width: 100%; padding-right: 40px;">
@@ -86,15 +102,14 @@ function escape($value)
           style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;"></i>
       </div>
     </div>
-    <small id="confirm_password-error"></small>
     <br>
 
+    <small id="status-error" style="color: red;"></small>
     <p>Status <span style="color: red;">*</span> :</p>
     <input type="radio" id="active" name="status" value="1" checked>
     <label for="active">Active</label>
     <input type="radio" id="inactive" name="status" value="0">
     <label for="inactive">Inactive</label>
-    <small id="status-error"></small>
     <br><br>
 
       <input type="submit" value="Submit">
@@ -118,55 +133,77 @@ function escape($value)
     });
 
     function validateForm() {
-      let missingFields = [];
+      const errorElements = document.querySelectorAll("#registration-form small");
+      errorElements.forEach(function (errorElement) {
+        errorElement.textContent = "";
+      });
 
-      let fullNameValue = document.getElementById("full_name").value.trim();
+      let isValid = true;
+      const showError = function (errorId, message) {
+        document.getElementById(errorId).textContent = message;
+        isValid = false;
+      };
+
+      const fullName = document.getElementById("full_name");
+      let fullNameValue = fullName.value.trim();
       if (fullNameValue === "") {
-        missingFields.push("Full Name");
+        showError("full-name-error", "Full Name is required.");
       } else if (fullNameValue.length > 100) {
-        missingFields.push("Name should be under 100 characters");
+        showError("full-name-error", "Name must be under 100 characters.");
       }
 
-      let emailValue = document.getElementById("email").value.trim();
+      const email = document.getElementById("email");
+      let emailValue = email.value.trim();
       if (emailValue === "") {
-        missingFields.push("Email ID");
+        showError("email-error", "Email is required.");
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
-        missingFields.push("Valid Email ID");
+        showError("email-error", "Enter a valid email address.");
       }
 
-      let genderValue = document.getElementById("gender").value.trim();
+      const gender = document.getElementById("gender");
+      let genderValue = gender.value.trim();
       if (genderValue === "") {
-        missingFields.push("Gender");
+        showError("gender-error", "Gender is required.");
       }
 
-      let fileData = document.getElementById("myfile").files[0];
+      const myfile = document.getElementById("myfile");
+      let fileData = myfile.files[0];
       if (fileData && fileData.size > 1024 * 1024) {
-        missingFields.push("Upload profile picture");
+        showError("myfile-error", "Profile picture must be smaller than 1 MB.");
       }
 
-      let passwordValue = document.getElementById("pwd").value.trim();
+      const password = document.getElementById("pwd");
+      let passwordValue = password.value.trim();
       let complexPattern = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).+$/;
       if (passwordValue === "") {
-        missingFields.push("Password");
+        showError("pwd-error", "Password is required.");
       } else if (passwordValue.length < 6 || passwordValue.length > 20) {
-        missingFields.push("Password must be at least 6 characters and less than 20");
+        showError("pwd-error", "Password must be between 6 and 20 characters.");
       } else if (!complexPattern.test(passwordValue)) {
-        missingFields.push("Password must contain uppercase, lowercase, a number, and a special character");
+        showError("pwd-error", "Use uppercase, lowercase, a number, and a special character.");
       }
 
-      let confirmpasswordValue = document.getElementById("confirm_password").value.trim();
+      const confirmPassword = document.getElementById("confirm_password");
+      let confirmpasswordValue = confirmPassword.value.trim();
       if (confirmpasswordValue === "") {
-        missingFields.push("Confirm Password");
+        showError("confirm_password-error", "Confirm Password is required.");
       } else if (passwordValue !== confirmpasswordValue) {
-        missingFields.push("Password does not Match");
+        showError("confirm_password-error", "Passwords do not match.");
       }
 
-      if (missingFields.length > 0) {
-        alert("The following fields are required: " + missingFields.join(", "));
-        return false;
+      const activeStatus = document.getElementById("active");
+      const inactiveStatus = document.getElementById("inactive");
+      if (!activeStatus.checked && !inactiveStatus.checked) {
+        showError("status-error", "Status is required.");
       }
 
-      return true;
+      return isValid;
+    }
+
+    function clear_errors() {
+      document.querySelectorAll("#registration-form small").forEach(function (errorElement) {
+        errorElement.textContent = "";
+      });
     }
 
     $("#togglePassword").on("click", function () {
@@ -218,34 +255,6 @@ function escape($value)
         });
     });
 
-    document.querySelectorAll("form[action='delete.php']").forEach(function (form) {
-      form.addEventListener("submit", function (event) {
-        event.preventDefault();
-        if (!confirm("Delete this user?")) {
-          return;
-        }
-
-        fetch(form.action, {
-          method: "POST",
-          body: new FormData(form)
-        })
-          .then(function (response) {
-            return response.text().then(function (text) {
-              return { ok: response.ok, data: JSON.parse(text) };
-            });
-          })
-          .then(function (result) {
-            if (!result.ok || !result.data.success) {
-              throw new Error(result.data.message || "Unable to delete user.");
-            }
-            alert(result.data.message);
-            form.closest("tr").remove();
-          })
-          .catch(function (error) {
-            alert(error.message);
-          });
-      });
-    });
   </script>
 
   <?php if (isset($_GET['deleted']) && $_GET['deleted'] === '1'): ?>
@@ -267,6 +276,7 @@ function escape($value)
   <?php endif; ?>
   <br>
 
+  <?php if (mysqli_num_rows($users) > 0): ?>
   <div class="container">
     <h2>List of Users</h2>
     <table class="table">
@@ -315,6 +325,8 @@ function escape($value)
       </tbody>
     </table>
   </div>
+  <?php endif; ?>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -365,8 +377,45 @@ function escape($value)
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    function showToast(message) {
+      const toast = document.getElementById("toast-message");
+      toast.textContent = message;
+      toast.style.display = "block";
+      setTimeout(function () {
+        toast.style.display = "none";
+      }, 5000);
+    }
+
+    document.querySelectorAll("form[action='delete.php']").forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (!confirm("Delete this user?")) {
+          return;
+        }
+
+        fetch(form.action, {
+          method: "POST",
+          body: new FormData(form)
+        })
+          .then(function (response) {
+            return response.json().then(function (data) {
+              return { ok: response.ok, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok || !result.data.success) {
+              throw new Error(result.data.message || "Unable to delete user.");
+            }
+            showToast(result.data.message);
+            form.closest("tr").remove();
+          })
+          .catch(function (error) {
+            alert(error.message);
+          });
+      });
+    });
+
     document.querySelectorAll('.edit-user-button').forEach(function (button) {
       button.addEventListener('click', function () {
         document.getElementById('edit-id').value = button.dataset.id;

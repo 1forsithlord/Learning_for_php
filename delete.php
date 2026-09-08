@@ -3,23 +3,37 @@ require 'connection.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo 'Method not allowed.';
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Method not allowed.']);
     exit;
 }
 
+$errors = [];
 $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+
 if (!$id) {
-    die('Invalid user ID.');
+    $errors[] = 'Invalid user ID.';
+} else {
+    $select = mysqli_prepare($conn, 'SELECT id FROM users WHERE id = ? AND is_deleted = 0');
+    mysqli_stmt_bind_param($select, 'i', $id);
+    mysqli_stmt_execute($select);
+    $user = mysqli_fetch_assoc(mysqli_stmt_get_result($select));
+    mysqli_stmt_close($select);
+
+    if (!$user) {
+        $errors[] = 'User not found.';
+    }
 }
 
-$select = mysqli_prepare($conn, 'SELECT id FROM users WHERE id = ? AND is_deleted = 0');
-mysqli_stmt_bind_param($select, 'i', $id);
-mysqli_stmt_execute($select);
-$user = mysqli_fetch_assoc(mysqli_stmt_get_result($select));
-mysqli_stmt_close($select);
-
-if (!$user) {
-    die('User not found.');
+if ($errors) {
+    http_response_code(422);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => implode("\n", $errors),
+        'errors' => $errors
+    ]);
+    exit;
 }
 
 $delete = mysqli_prepare($conn, 'UPDATE users SET is_deleted = 1 WHERE id = ?');

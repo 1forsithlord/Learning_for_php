@@ -68,7 +68,7 @@ The application uses the `users` table with these important fields:
 - `index.php`: registration form, user list, JavaScript validation, edit modal, and same-page actions
 - `ajax.php`: creates a user
 - `edit.php`: updates a user
-- `delete.php`: soft-deletes a user
+- `ajax.php`: handles add, edit, and soft-delete requests
 - `connection.php`: MySQL connection and image-upload helper
 - `database.sql`: database migrations
 - `uploads/`: uploaded profile pictures
@@ -89,7 +89,7 @@ Clicking **Edit** opens a modal. The form submits the changes to `edit.php`.
 
 ### Delete
 
-Clicking **Delete** sends a background POST request to `delete.php`. The record is kept in the database and marked with `is_deleted = 1`.
+Clicking **Delete** sends a background POST request to `ajax.php`. The record is kept in the database and marked with `is_deleted = 1`.
 
 ## Password Warning
 
@@ -109,6 +109,6 @@ PHP syntax can be checked with:
 php -l index.php
 php -l ajax.php
 php -l edit.php
-php -l delete.php
+php -l ajax.php
 php -l connection.php
 ```

@@ -10,6 +10,8 @@ function escape($value)
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
+
+$ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/') . '/ajax.php';
 ?>
 <!DOCTYPE html>
 <html>
@@ -21,11 +23,9 @@ function escape($value)
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <link rel = "stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
  <style>
-  #registration-wrapper {
-    width: 420px;
-    margin-left: 5%;
-    font-size: 13px;
-  }
+    #registration-wrapper {
+      font-size: 13px;
+    }
 
   #show-register-form {
     margin-left: 5%;
@@ -41,6 +41,7 @@ function escape($value)
       color: white;
       background-color: #198754;
       border-radius: 4px;
+      white-space: pre-line;
     }
 </style>
 </head>
@@ -50,214 +51,207 @@ function escape($value)
   <div id="toast-message" role="status"></div>
 
  <div style="margin-top: 20px; margin-bottom: 20px;">
-    <button type="button" id="show-register-form" class="btn btn-primary">Register</button>
+    <button type="button" id="show-register-form" class="btn btn-primary">Add User</button>
   </div>
 
-  <div id="registration-wrapper" style="display: none;">
-    <h3>Registration Form</h3>
+  <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="registration-form" action="ajax.php" method="POST" enctype="multipart/form-data" novalidate>
+          <div class="modal-header">
+            <h3 class="modal-title" id="userModalLabel">Registration Form</h3>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="id" id="edit-id">
+            <!-- form-mode: 0 = Add (blank form, no id), 1 = Edit (form pre-filled with existing user data) -->
+            <input type="hidden" id="form-mode" value="0">
 
-    <form id="registration-form" action="ajax.php" method="POST" enctype="multipart/form-data"
-      novalidate >
-    <small id="full-name-error" style="color: red;"></small>
-    <label for="full_name">Full Name <span style="color: red;">*</span> : </label>
-    <input type="text" id="full_name" name="full-name" maxlength="100" autofocus>
-    <br><br>
+            <small id="full-name-error" style="color: red;"></small>
+            <label for="full_name">Full Name <span style="color: red;">*</span> : </label>
+            <input type="text" id="full_name" name="full-name" maxlength="100" autofocus>
+            <br><br>
 
-    <small id="email-error" style="color: red;"></small>
-    <label for="email">Email ID <span style="color: red;">*</span> : </label>
-    <input type="email" id="email" name="email" maxlength="100">
-    <br><br>
+            <small id="email-error" style="color: red;"></small>
+            <label for="email">Email ID <span style="color: red;">*</span> : </label>
+            <input type="email" id="email" name="email" maxlength="100">
+            <br><br>
 
-    <small id="gender-error" style="color: red;"></small>
-    <label for="gender">Gender <span style="color: red;">*</span> : </label>
-    <select id="gender" name="gender">
-      <option value="">Select Gender</option>
-      <option value="M">Male</option>
-      <option value="F">Female</option>
-      <option value="O">Other</option>
-    </select>
-    <br><br>
+            <small id="gender-error" style="color: red;"></small>
+            <label for="gender">Gender <span style="color: red;">*</span> : </label>
+            <select id="gender" name="gender">
+              <option value="">Select Gender</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+              <option value="O">Other</option>
+            </select>
+            <br><br>
 
-    <small id="myfile-error" style="color: red;"></small>
-    <label for="myfile">Upload Profile Picture:</label>
-    <input type="file" id="myfile" name="myfile" accept="image/jpeg, image/png, image/jpg">
-    <br><br>
+            <small id="myfile-error" style="color: red;"></small>
+            <label for="myfile">Upload Profile Picture:</label>
+            <input type="file" id="myfile" name="myfile" accept="image/jpeg, image/png, image/jpg">
+            <br><br>
 
-    <div style="width: 200px;">
-      <small id="pwd-error" style="color: red;"></small>
-      <label for="pwd"> Password <span style="color: red;">*</span> : </label>
-      <div style="position: relative; display: inline-block; width: 100%;">
-        <input type="password" id="pwd" name="pwd" maxlength="20" style="width: 100%; padding-right: 40px;">
-        <i class="fa-solid fa-eye" id="togglePassword" data-target="pwd"
-          style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;"></i>
+            <div style="width: 200px;">
+              <small id="pwd-error" style="color: red;"></small>
+              <label for="pwd"> Password <span style="color: red;">*</span> : </label>
+              <div style="position: relative; display: inline-block; width: 100%;">
+                <input type="password" id="pwd" name="pwd" maxlength="20" style="width: 100%; padding-right: 40px;">
+                <i class="fa-solid fa-eye password-toggle" id="togglePassword" data-target="pwd" aria-label="Show password" title="Show password"
+                  style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;"></i>
+              </div>
+            </div>
+
+            <div style="width: 200px;">
+              <small id="confirm_password-error" style="color: red;"></small>
+              <label for="confirm_password">Confirm Password <span style="color: red;">*</span> : </label>
+              <div style="position: relative; display: inline-block; width: 100%;">
+                <input type="password" id="confirm_password" name="confirm_password" maxlength="20" style="width: 100%; padding-right: 40px;">
+                <i class="fa-solid fa-eye password-toggle" data-target="confirm_password" aria-label="Show password" title="Show password"
+                  style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;"></i>
+              </div>
+            </div>
+            <br>
+
+            <small id="status-error" style="color: red;"></small>
+            <p>Status <span style="color: red;">*</span> :</p>
+            <input type="radio" id="active" name="status" value="1" checked>
+            <label for="active">Active</label>
+            <input type="radio" id="inactive" name="status" value="0">
+            <label for="inactive">Inactive</label>
+            <br><br>
+
+            <input type="submit" value="Add">
+            <input type="reset" value="Clear" onclick="clear_errors();">
+          </div>
+        </form>
       </div>
     </div>
-
-    <div style="width: 200px;">
-      <small id="confirm_password-error" style="color: red;"></small>
-      <label for="confirm_password">Confirm Password <span style="color: red;">*</span> : </label>
-      <div style="position: relative; display: inline-block; width: 100%;">
-        <input type="password" id="confirm_password" name="confirm_password" maxlength="20" style="width: 100%; padding-right: 40px;">
-        <i class="fa-solid fa-eye toggle-password-confirm" data-target="confirm_password"
-          style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;"></i>
-      </div>
-    </div>
-    <br>
-
-    <small id="status-error" style="color: red;"></small>
-    <p>Status <span style="color: red;">*</span> :</p>
-    <input type="radio" id="active" name="status" value="1" checked>
-    <label for="active">Active</label>
-    <input type="radio" id="inactive" name="status" value="0">
-    <label for="inactive">Inactive</label>
-    <br><br>
-
-      <input type="submit" value="Submit">
-      <input type="reset" value="Reset" onclick="clear_errors();">
-    </form>
   </div>
 
-  <script>
-    document.getElementById("show-register-form").addEventListener("click", function () {
-      const wrapper = document.getElementById("registration-wrapper");
-      const button = this;
-
-      if (wrapper.style.display === "none") {
-        wrapper.style.display = "block";
-        button.textContent = "Hide Form";
-        document.getElementById("full_name").focus();
-      } else {
-        wrapper.style.display = "none";
-        button.textContent = "Register";
-      }
+  <script> 
+    $("#show-register-form").on("click", function () {
+      const form = $("#registration-form");
+      form[0].reset();
+      $("#edit-id").val("");
+      $("#form-mode").val("0"); // 0 = Add: no id, blank form
+      form.attr("action", "ajax.php");
+      $("#userModalLabel").text("Registration Form");
+      $("#registration-form input[type='submit']").val("Add");
+      clear_errors();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).show();
     });
 
-    function validateForm() {
-      const errorElements = document.querySelectorAll("#registration-form small");
-      errorElements.forEach(function (errorElement) {
-        errorElement.textContent = "";
-      });
+    function validateForm(isEditMode) {
+      $("#registration-form small").text("");
 
-      let isValid = true;
-      const showError = function (errorId, message) {
-        document.getElementById(errorId).textContent = message;
-        isValid = false;
+      const errors = [];
+      const validateField = function (errorId, isInvalid, message) {
+        const existingError = errors.findIndex(function (error) {
+          return error.id === errorId;
+        });
+        if (existingError !== -1) {
+          errors.splice(existingError, 1);
+        }
+        if (isInvalid) {
+          errors.push({ id: errorId, message: message });
+        }
       };
 
-      const fullName = document.getElementById("full_name");
-      let fullNameValue = fullName.value.trim();
-      if (fullNameValue === "") {
-        showError("full-name-error", "Full Name is required.");
-      } else if (fullNameValue.length > 100) {
-        showError("full-name-error", "Name must be under 100 characters.");
+      const fullNameValue = $("#full_name").val().trim();
+      validateField("full-name-error", fullNameValue === "" || fullNameValue.length > 100, fullNameValue === "" ? "Full Name is required." : "Name must be under 100 characters.");
+
+      const emailValue = $("#email").val().trim();
+      validateField("email-error", emailValue === "" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue), emailValue === "" ? "Email is required." : "Enter a valid email address.");
+
+      const genderValue = $("#gender").val().trim();
+      validateField("gender-error", genderValue === "", "Gender is required.");
+
+      const fileData = $("#myfile")[0].files[0];
+      validateField("myfile-error", fileData && fileData.size > 1024 * 1024, fileData && fileData.size > 1024 * 1024 ? "Profile picture must be smaller than 1 MB." : "");
+      if (fileData && fileData.size <= 1024 * 1024 && !["image/jpeg", "image/png"].includes(fileData.type)) {
+        validateField("myfile-error", true, "Only JPG and PNG pictures are allowed.");
       }
 
-      const email = document.getElementById("email");
-      let emailValue = email.value.trim();
-      if (emailValue === "") {
-        showError("email-error", "Email is required.");
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
-        showError("email-error", "Enter a valid email address.");
+      const passwordValue = $("#pwd").val().trim();
+      const complexPattern = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).+$/;
+      validateField("pwd-error", (!isEditMode && passwordValue === "") || (passwordValue !== "" && (passwordValue.length < 6 || passwordValue.length > 20 || !complexPattern.test(passwordValue))), passwordValue === "" ? "Password is required." : passwordValue.length < 6 || passwordValue.length > 20 ? "Password must be between 6 and 20 characters." : "Use uppercase, lowercase, a number, and a special character.");
+
+      const confirmpasswordValue = $("#confirm_password").val().trim();
+      validateField("confirm_password-error", (!isEditMode && confirmpasswordValue === "") || passwordValue !== confirmpasswordValue, confirmpasswordValue === "" ? "Confirm Password is required." : "Passwords do not match.");
+
+      validateField("status-error", !$("#registration-form input[name='status']:checked").val(), "Status is required.");
+
+      if (errors.length > 0) {
+        showToast(errors.map(function (error) {
+          return error.message;
+        }).join("\n"), true);
       }
 
-      const gender = document.getElementById("gender");
-      let genderValue = gender.value.trim();
-      if (genderValue === "") {
-        showError("gender-error", "Gender is required.");
-      }
-
-      const myfile = document.getElementById("myfile");
-      let fileData = myfile.files[0];
-      if (fileData && fileData.size > 1024 * 1024) {
-        showError("myfile-error", "Profile picture must be smaller than 1 MB.");
-      }
-
-      const password = document.getElementById("pwd");
-      let passwordValue = password.value.trim();
-      let complexPattern = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).+$/;
-      if (passwordValue === "") {
-        showError("pwd-error", "Password is required.");
-      } else if (passwordValue.length < 6 || passwordValue.length > 20) {
-        showError("pwd-error", "Password must be between 6 and 20 characters.");
-      } else if (!complexPattern.test(passwordValue)) {
-        showError("pwd-error", "Use uppercase, lowercase, a number, and a special character.");
-      }
-
-      const confirmPassword = document.getElementById("confirm_password");
-      let confirmpasswordValue = confirmPassword.value.trim();
-      if (confirmpasswordValue === "") {
-        showError("confirm_password-error", "Confirm Password is required.");
-      } else if (passwordValue !== confirmpasswordValue) {
-        showError("confirm_password-error", "Passwords do not match.");
-      }
-
-      const activeStatus = document.getElementById("active");
-      const inactiveStatus = document.getElementById("inactive");
-      if (!activeStatus.checked && !inactiveStatus.checked) {
-        showError("status-error", "Status is required.");
-      }
-
-      return isValid;
+      return errors.length === 0;
     }
-
     function clear_errors() {
-      document.querySelectorAll("#registration-form small").forEach(function (errorElement) {
-        errorElement.textContent = "";
-      });
+      $("#registration-form small").text("");
     }
 
-    $("#togglePassword").on("click", function () {
-      let password = $("#pwd");
+    $(document).on("click", ".password-toggle", function () {
+      const button = $(this);
+      const password = button.closest("form").find("#" + button.data("target"));
       if (password.attr("type") === "password") {
         password.attr("type", "text");
-        $(this).removeClass("fa-eye").addClass("fa-eye-slash");
+        button.removeClass("fa-eye").addClass("fa-eye-slash");
+        button.attr("aria-label", "Hide password").attr("title", "Hide password");
       } else {
         password.attr("type", "password");
-        $(this).removeClass("fa-eye-slash").addClass("fa-eye");
+        button.removeClass("fa-eye-slash").addClass("fa-eye");
+        button.attr("aria-label", "Show password").attr("title", "Show password");
       }
     });
 
-    $(".toggle-password-confirm").on("click", function () {
-      let confirmPassword = $("#confirm_password");
-      if (confirmPassword.attr("type") === "password") {
-        confirmPassword.attr("type", "text");
-        $(this).removeClass("fa-eye").addClass("fa-eye-slash");
-      } else {
-        confirmPassword.attr("type", "password");
-        $(this).removeClass("fa-eye-slash").addClass("fa-eye");
-      }
-    });
+    $("#registration-form").on("submit", function (event) {
+      const form = this;
+      const mode = $("#form-mode").val(); // 0/1 for add and edit
+      const isEditMode = mode === "1";
 
-    document.getElementById("registration-form").addEventListener("submit", function (event) {
-      event.preventDefault();
-      if (!validateForm()) {
+      form.action = "ajax.php";
+
+      if (!validateForm(isEditMode)) {
+        event.preventDefault();
         return;
       }
 
-      fetch(this.action, {
+      //Add and edit both go through ajax.php.
+      event.preventDefault();
+      fetch(form.action, {
         method: "POST",
-        body: new FormData(this)
+        body: new FormData(form)
       })
         .then(function (response) {
           return response.text().then(function (text) {
-            return { ok: response.ok, data: JSON.parse(text) };
+            try {
+              return { ok: response.ok, data: JSON.parse(text) };
+            } catch (error) {
+              return { ok: false, data: { message: text || (isEditMode ? "Unable to update user." : "Unable to add user.") } };
+            }
           });
         })
         .then(function (result) {
           if (!result.ok || !result.data.success) {
-            throw new Error(result.data.message || "Unable to add user.");
+            throw new Error(result.data.message || (isEditMode ? "Unable to update user." : "Unable to add user."));
           }
-          alert(result.data.message);
-          window.location.reload();
+          showToast(result.data.message, false);
+          setTimeout(function () {
+            window.location.reload();
+          }, 1500);
         })
         .catch(function (error) {
-          alert(error.message);
+          showToast(error.message, true);
         });
     });
 
   </script>
 
-  <?php if (isset($_GET['deleted']) && $_GET['deleted'] === '1'): ?>
+   <?php if (isset($_GET['deleted']) && $_GET['deleted'] === '1'): ?> 
     <p id="delete-message" style="color: green;">User deleted successfully.</p>
     <script>
       setTimeout(function () {
@@ -271,20 +265,17 @@ function escape($value)
       cleanUrl.searchParams.delete('deleted');
       window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
     </script>
-  <?php elseif (isset($_GET['message'])): ?>
-    <p style="color: green;"><?= escape($_GET['message']) ?></p>
   <?php endif; ?>
   <br>
 
   <?php if (mysqli_num_rows($users) > 0): ?>
-  <div class="container">
+  <div class="container"><br><br>
     <h2>List of Users</h2>
     <table class="table">
       <thead>
         <tr>
           <th>Action</th>
-          <th>ID</th>
-          <th>Picture</th>
+          <th> Profile Picture</th>
           <th>Full Name</th>
           <th>Email ID</th>
           <th>Gender</th>
@@ -297,18 +288,17 @@ function escape($value)
           <tr>
             <td>
               <button type="button" class="btn btn-primary btn-sm edit-user-button"
-                data-bs-toggle="modal" data-bs-target="#editUserModal"
                 data-id="<?= (int) $user['id'] ?>"
                 data-full-name="<?= escape($user['full_name']) ?>"
                 data-email="<?= escape($user['email_id']) ?>"
                 data-gender="<?= escape($user['gender']) ?>"
                 data-status="<?= (int) $user['status'] ?>">Edit</button>
-              <form action="delete.php" method="POST" style="display: inline;">
+              <form action="<?= escape($ajaxEndpoint) ?>" method="POST" data-action="delete" style="display: inline;">
+                <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
                 <button type="submit" class="btn btn-danger btn-sm">Delete</button>
               </form>
             </td>
-            <td><?= escape($user['id']) ?></td>
             <td>
               <?php if (!empty($user['profile_picture'])): ?>
                 <img src="<?= escape($user['profile_picture']) ?>" alt="Profile picture" width="48" height="48">
@@ -318,7 +308,7 @@ function escape($value)
             </td>
             <td><?= escape($user['full_name']) ?></td>
             <td><?= escape($user['email_id']) ?></td>
-            <td><?= escape($user['gender']) ?></td>
+            <td><?= escape(['M' => 'Male', 'F' => 'Female', 'O' => 'Other'][$user['gender']] ?? $user['gender']) ?></td>
             <td><?= $user['status'] ? 'Active' : 'Inactive' ?></td>
           </tr>
         <?php endwhile; ?>
@@ -328,104 +318,93 @@ function escape($value)
   <?php endif; ?>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-  <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <form action="edit.php" method="POST" enctype="multipart/form-data">
-          <div class="modal-header">
-            <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="id" id="edit-id">
-            <div class="mb-3">
-              <label for="edit-full-name" class="form-label">Full Name</label>
-              <input type="text" name="full-name" id="edit-full-name" maxlength="100" class="form-control" required>
-            </div>
-            <div class="mb-3">
-              <label for="edit-email" class="form-label">Email</label>
-              <input type="email" name="email" id="edit-email" maxlength="100" class="form-control" required>
-            </div>
-            <div class="mb-3">
-              <label for="edit-gender" class="form-label">Gender</label>
-              <select name="gender" id="edit-gender" class="form-select" required>
-                <option value="M">Male</option>
-                <option value="F">Female</option>
-                <option value="O">Other</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label for="edit-password" class="form-label">New Password (optional)</label>
-              <input type="password" name="pwd" id="edit-password" minlength="6" maxlength="20" class="form-control">
-            </div>
-            <div class="mb-3">
-              <label for="edit-picture" class="form-label">New Profile Picture</label>
-              <input type="file" name="myfile" id="edit-picture" accept="image/jpeg,image/png" class="form-control">
-            </div>
-            <fieldset>
-              <legend class="col-form-label pt-0">Status</legend>
-              <label class="me-3"><input type="radio" name="status" value="1" id="edit-active"> Active</label>
-              <label><input type="radio" name="status" value="0" id="edit-inactive"> Inactive</label>
-            </fieldset>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
   <script>
-    function showToast(message) {
+    function showToast(message, isError = false) {
       const toast = document.getElementById("toast-message");
       toast.textContent = message;
+      toast.style.backgroundColor = isError ? "#dc3545" : "#198754";
       toast.style.display = "block";
       setTimeout(function () {
         toast.style.display = "none";
       }, 5000);
     }
 
-    document.querySelectorAll("form[action='delete.php']").forEach(function (form) {
+    <?php if (isset($_GET['message'])): ?>
+      showToast(<?= json_encode($_GET['message']) ?>, false);
+      const updateCleanUrl = new URL(window.location.href);
+      updateCleanUrl.searchParams.delete("message");
+      window.history.replaceState({}, document.title, updateCleanUrl.pathname + updateCleanUrl.search);
+    <?php endif; ?>
+    <?php if (isset($_GET['error'])): ?>
+      showToast(<?= json_encode($_GET['error']) ?>, true);
+      const errorCleanUrl = new URL(window.location.href);
+      errorCleanUrl.searchParams.delete("error");
+      window.history.replaceState({}, document.title, errorCleanUrl.pathname + errorCleanUrl.search);
+    <?php endif; ?>
+
+    document.querySelectorAll("form[data-action='delete']").forEach(function (form) {
       form.addEventListener("submit", function (event) {
         event.preventDefault();
-        if (!confirm("Delete this user?")) {
+        if (!confirm("Are you sure to delete this user?")) {
           return;
         }
 
-        fetch(form.action, {
+        fetch(<?= json_encode($ajaxEndpoint) ?>, {
           method: "POST",
           body: new FormData(form)
         })
           .then(function (response) {
-            return response.json().then(function (data) {
-              return { ok: response.ok, data: data };
+            return response.text().then(function (text) {
+              try {
+                return { ok: response.ok, data: JSON.parse(text) };
+              } catch (error) {
+                return {
+                  ok: false,
+                  data: { message: text || "Unable to delete user." }
+                };
+              }
             });
           })
           .then(function (result) {
             if (!result.ok || !result.data.success) {
               throw new Error(result.data.message || "Unable to delete user.");
             }
-            showToast(result.data.message);
+
             form.closest("tr").remove();
+            showToast(result.data.message);
           })
           .catch(function (error) {
-            alert(error.message);
+            showToast(error.message, true);
           });
       });
     });
 
     document.querySelectorAll('.edit-user-button').forEach(function (button) {
       button.addEventListener('click', function () {
-        document.getElementById('edit-id').value = button.dataset.id;
-        document.getElementById('edit-full-name').value = button.dataset.fullName;
-        document.getElementById('edit-email').value = button.dataset.email;
-        document.getElementById('edit-gender').value = button.dataset.gender;
-        document.getElementById('edit-active').checked = button.dataset.status === '1';
-        document.getElementById('edit-inactive').checked = button.dataset.status === '0';
+        const form = $("#registration-form");
+        form.attr("action", "edit.php");
+        $("#userModalLabel").text("Edit User");
+        $("#registration-form input[type='submit']").val("Update");
+        $("#form-mode").val("1"); // 1 = Edit: id present, form pre-filled with existing data
+        $("#edit-id").val(button.dataset.id);
+        $("#full_name").val(button.dataset.fullName);
+        $("#email").val(button.dataset.email);
+        $("#gender").val(button.dataset.gender);
+        $("#pwd, #confirm_password").val("").attr("type", "password");
+        $("#active").prop("checked", button.dataset.status === "1");
+        $("#inactive").prop("checked", button.dataset.status === "0");
+        $(".password-toggle").removeClass("fa-eye-slash").addClass("fa-eye");
+        clear_errors();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).show();
       });
     });
   </script>
 </body>
+              <!-- 
+              
+            all pop out should be in the right corner
+            use same form for add and edit 
+            photo must pop out
+            validate the edit one by using the same element id of add user
+            genders must show male and female in frontend    -->
 </html>

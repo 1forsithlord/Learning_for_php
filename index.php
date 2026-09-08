@@ -1,6 +1,187 @@
 <?php
 require 'connection.php';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $action = $_POST['action'] ?? 'save';
+
+  if ($action === 'delete') {
+    $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+
+    if (!$id) {
+      http_response_code(422);
+      header('Content-Type: application/json');
+      echo json_encode(['success' => false, 'message' => 'Invalid user ID.']);
+      exit;
+    }
+
+    $select = mysqli_prepare($conn, 'SELECT id FROM users WHERE id = ? AND is_deleted = 0');
+    mysqli_stmt_bind_param($select, 'i', $id);
+    mysqli_stmt_execute($select);
+    $user = mysqli_fetch_assoc(mysqli_stmt_get_result($select));
+    mysqli_stmt_close($select);
+
+    if (!$user) {
+      http_response_code(422);
+      header('Content-Type: application/json');
+      echo json_encode(['success' => false, 'message' => 'User not found.']);
+      exit;
+    }
+
+    $delete = mysqli_prepare($conn, 'UPDATE users SET is_deleted = 1 WHERE id = ?');
+    mysqli_stmt_bind_param($delete, 'i', $id);
+    mysqli_stmt_execute($delete);
+    mysqli_stmt_close($delete);
+
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'message' => 'User deleted successfully.']);
+    exit;
+  }
+
+  $errors = [];
+  //Ternary Operator
+  // if id is set and not empty then mode is edit else add
+  $mode = (isset($_POST['id']) && $_POST['id'] !== '') ? 'edit' : 'add';
+  // Null Coalescing Operator
+  $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+
+  if ($mode === 'edit') {
+    if (!$id) {
+      $errors[] = 'Invalid user ID.';
+    } else {
+      $checkStatement = mysqli_prepare($conn, 'SELECT id FROM users WHERE id = ? AND is_deleted = 0');
+      mysqli_stmt_bind_param($checkStatement, 'i', $id);
+      mysqli_stmt_execute($checkStatement);
+      $userExists = mysqli_stmt_get_result($checkStatement)->num_rows > 0;
+      mysqli_stmt_close($checkStatement);
+
+      if (!$userExists) {
+        $errors[] = 'User not found.';
+      }
+    }
+  }
+
+  $fullNameInput = $_POST['full-name'] ?? null;
+  $fullName = is_string($fullNameInput) ? trim($fullNameInput) : '';
+  if ($fullName === '') {
+    $errors[] = 'Full Name is required.';
+  } elseif (strlen($fullName) > 100) {
+    $errors[] = 'Name must be under 100 characters.';
+  }
+
+  $emailInput = $_POST['email'] ?? null;
+  $email = is_string($emailInput) ? trim($emailInput) : '';
+  if ($email === '') {
+    $errors[] = 'Email is required.';
+  } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $errors[] = 'Enter a valid email address.';
+  }
+
+  $genderInput = $_POST['gender'] ?? null;
+  $gender = is_string($genderInput) ? $genderInput : '';
+  if (!in_array($gender, ['M', 'F', 'O'], true)) {
+    $errors[] = 'Gender is required.';
+  }
+
+  $passwordInput = $_POST['pwd'] ?? null;
+  $password = is_string($passwordInput) ? $passwordInput : '';
+  if ($mode === 'add' && $password === '') {
+    $errors[] = 'Password is required.';
+  } elseif ($password !== '' && (strlen($password) < 6 || strlen($password) > 20 || !preg_match('/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/', $password))) {
+    $errors[] = 'Use uppercase, lowercase, a number, and a special character.';
+  }
+
+  $confirmPasswordInput = $_POST['confirm_password'] ?? null;
+  $confirmPassword = is_string($confirmPasswordInput) ? $confirmPasswordInput : '';
+  if ($mode === 'add' && $confirmPassword === '') {
+    $errors[] = 'Confirm Password is required.';
+  } elseif ($password !== '' && $confirmPassword === '') {
+    $errors[] = 'Confirm Password is required.';
+  } elseif ($password !== '' && $password !== $confirmPassword) {
+    $errors[] = 'Passwords do not match.';
+  }
+
+  $statusInput = $_POST['status'] ?? null;
+  $status = is_scalar($statusInput) ? filter_var($statusInput, FILTER_VALIDATE_INT) : false;
+  if (!in_array($status, [0, 1], true)) {
+    $errors[] = 'Status is required.';
+  }
+
+  $file = $_FILES['myfile'] ?? null;
+  if ($file !== null && $file['error'] !== UPLOAD_ERR_NO_FILE) {
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+      $errors[] = 'Unable to upload the profile picture.';
+    } elseif ($file['size'] > 1024 * 1024) {
+      $errors[] = 'Profile picture must be smaller than 1 MB.';
+    } else {
+      $fileInfo = finfo_open(FILEINFO_MIME_TYPE);
+      $mimeType = finfo_file($fileInfo, $file['tmp_name']);
+      finfo_close($fileInfo);
+
+      if (!in_array($mimeType, ['image/jpeg', 'image/png'], true)) {
+        $errors[] = 'Only JPG and PNG pictures are allowed.';
+      }
+    }
+  }
+
+  if ($errors) {
+    http_response_code(422);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => implode("\n", $errors), 'errors' => $errors]);
+    exit;
+  }
+
+  try {
+    if ($mode === 'add') {
+      $profilePicture = upload_profile_picture($file);
+      $statement = mysqli_prepare($conn, 'INSERT INTO users (full_name, email_id, gender, password, status, profile_picture) VALUES (?, ?, ?, ?, ?, ?)');
+      mysqli_stmt_bind_param($statement, 'ssssis', $fullName, $email, $gender, $password, $status, $profilePicture);
+      mysqli_stmt_execute($statement);
+      mysqli_stmt_close($statement);
+
+      header('Content-Type: application/json');
+      echo json_encode(['success' => true, 'message' => 'User added successfully.']);
+      exit;
+    }
+
+    $profilePicture = null;
+    if ($file !== null && $file['error'] === UPLOAD_ERR_OK) {
+      $profilePicture = upload_profile_picture($file);
+    }
+
+    $fields = ['full_name = ?', 'email_id = ?', 'gender = ?', 'status = ?'];
+    $types = 'sssi';
+    $params = [$fullName, $email, $gender, $status];
+
+    if ($password !== '') {
+      $fields[] = 'password = ?';
+      $types .= 's';
+      $params[] = $password;
+    }
+
+    if ($profilePicture !== null) {
+      $fields[] = 'profile_picture = ?';
+      $types .= 's';
+      $params[] = $profilePicture;
+    }
+
+    $types .= 'i';
+    $params[] = $id;
+    $statement = mysqli_prepare($conn, 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?');
+    mysqli_stmt_bind_param($statement, $types, ...$params);
+    mysqli_stmt_execute($statement);
+    mysqli_stmt_close($statement);
+  } catch (Throwable $error) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Unable to save user.']);
+    exit;
+  }
+
+  header('Content-Type: application/json');
+  echo json_encode(['success' => true, 'message' => 'User updated successfully.']);
+  exit;
+}
+
 $users = mysqli_query($conn, 'SELECT id, full_name, email_id, gender, status, profile_picture FROM users WHERE is_deleted = 0 ORDER BY id DESC');
 if (!$users) {
     die('Unable to load users: ' . mysqli_error($conn));
@@ -11,7 +192,7 @@ function escape($value)
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-$ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/') . '/ajax.php';
+$ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
 ?>
 <!DOCTYPE html>
 <html>
@@ -57,7 +238,7 @@ $ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
   <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <form id="registration-form" action="ajax.php" method="POST" enctype="multipart/form-data" novalidate>
+        <form id="registration-form" action="<?= escape($ajaxEndpoint) ?>" method="POST" enctype="multipart/form-data" novalidate>
           <div class="modal-header">
             <h3 class="modal-title" id="userModalLabel">Registration Form</h3>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -135,7 +316,7 @@ $ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
       form[0].reset();
       $("#edit-id").val("");
       $("#form-mode").val("0"); // 0 = Add: no id, blank form
-      form.attr("action", "ajax.php");
+      form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
       $("#userModalLabel").text("Registration Form");
       $("#registration-form input[type='submit']").val("Add");
       clear_errors();
@@ -213,14 +394,14 @@ $ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
       const mode = $("#form-mode").val(); // 0/1 for add and edit
       const isEditMode = mode === "1";
 
-      form.action = "ajax.php";
+      form.action = <?= json_encode($ajaxEndpoint) ?>;
 
       if (!validateForm(isEditMode)) {
         event.preventDefault();
         return;
       }
 
-      //Add and edit both go through ajax.php.
+      // Add and edit both call this page through AJAX.
       event.preventDefault();
       fetch(form.action, {
         method: "POST",
@@ -240,9 +421,8 @@ $ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
             throw new Error(result.data.message || (isEditMode ? "Unable to update user." : "Unable to add user."));
           }
           showToast(result.data.message, false);
-          setTimeout(function () {
-            window.location.reload();
-          }, 1500);
+          bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).hide();
+          form.reset();
         })
         .catch(function (error) {
           showToast(error.message, true);
@@ -382,7 +562,7 @@ $ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
     document.querySelectorAll('.edit-user-button').forEach(function (button) {
       button.addEventListener('click', function () {
         const form = $("#registration-form");
-        form.attr("action", "edit.php");
+        form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
         $("#userModalLabel").text("Edit User");
         $("#registration-form input[type='submit']").val("Update");
         $("#form-mode").val("1"); // 1 = Edit: id present, form pre-filled with existing data
@@ -400,11 +580,5 @@ $ajaxEndpoint = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
     });
   </script>
 </body>
-              <!-- 
-              
-            all pop out should be in the right corner
-            use same form for add and edit 
-            photo must pop out
-            validate the edit one by using the same element id of add user
-            genders must show male and female in frontend    -->
+       
 </html>

@@ -1,6 +1,33 @@
 <?php
 require 'connection.php';
 
+function get_user_by_id($conn, $id)
+{
+  $statement = mysqli_prepare($conn, 'SELECT id, full_name, email_id, gender, status, profile_picture FROM users WHERE id = ? AND is_deleted = 0');
+  mysqli_stmt_bind_param($statement, 'i', $id);
+  mysqli_stmt_execute($statement);
+  $user = mysqli_fetch_assoc(mysqli_stmt_get_result($statement));
+  mysqli_stmt_close($statement);
+
+  return $user ?: null;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'get_user') {
+  $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
+  $user = $id ? get_user_by_id($conn, $id) : null;
+
+  if (!$user) {
+    http_response_code(404);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'User not found.']);
+    exit;
+  }
+
+  header('Content-Type: application/json');
+  echo json_encode(['success' => true, 'user' => $user]);
+  exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $action = $_POST['action'] ?? 'save';
 
@@ -33,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     mysqli_stmt_close($delete);
 
     header('Content-Type: application/json');
-    echo json_encode(['success' => true, 'message' => 'User deleted successfully.']);
+    echo json_encode(['success' => true, 'message' => 'User deleted successfully.3']);
     exit;
   }
 
@@ -137,9 +164,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       mysqli_stmt_bind_param($statement, 'ssssis', $fullName, $email, $gender, $password, $status, $profilePicture);
       mysqli_stmt_execute($statement);
       mysqli_stmt_close($statement);
+      $id = mysqli_insert_id($conn);
+      $savedUser = get_user_by_id($conn, $id);
 
       header('Content-Type: application/json');
-      echo json_encode(['success' => true, 'message' => 'User added successfully.']);
+      echo json_encode(['success' => true, 'message' => 'User added successfully.', 'user' => $savedUser]);
       exit;
     }
 
@@ -170,6 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     mysqli_stmt_bind_param($statement, $types, ...$params);
     mysqli_stmt_execute($statement);
     mysqli_stmt_close($statement);
+    $savedUser = get_user_by_id($conn, $id);
   } catch (Throwable $error) {
     http_response_code(500);
     header('Content-Type: application/json');
@@ -178,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 
   header('Content-Type: application/json');
-  echo json_encode(['success' => true, 'message' => 'User updated successfully.']);
+  echo json_encode(['success' => true, 'message' => 'User updated successfully.', 'user' => $savedUser]);
   exit;
 }
 
@@ -192,7 +222,7 @@ function escape($value)
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-$ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
+$ajaxEndpoint = 'ajax.php';
 ?>
 <!DOCTYPE html>
 <html>
@@ -374,6 +404,50 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
     function clear_errors() {
       $("#registration-form small").text("");
     }
+     // escapeHtml() makes user data safe before placing it inside HTML. It replaces special characters with their HTML entity equivalents to prevent XSS attacks.
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function refreshUsers() {
+      // Step 8: Get the latest users and rebuild the whole table.
+      return $.ajax({
+        url: <?= json_encode($ajaxEndpoint) ?>,
+        method: "GET",
+        data: { action: "list_users" },
+        dataType: "json"
+      }).then(function (data) {
+        if (!data.success) {
+          throw new Error(data.message || "Unable to refresh users.");
+        }
+        return data.users;
+        })
+        .then(function (users) {
+          document.getElementById("users-tbody").innerHTML = users.map(function (user) {
+            return `
+              <tr data-user-id="${escapeHtml(user.id)}">
+                <td>
+                  <button type="button" class="btn btn-primary btn-sm edit-user-button" data-id="${escapeHtml(user.id)}">Edit</button>
+                  <form action="<?= escape($ajaxEndpoint) ?>" method="POST" data-action="delete" style="display: inline;">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="${escapeHtml(user.id)}">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                  </form>
+                </td>
+                <td>${user.profile_picture ? `<img src="${escapeHtml(user.profile_picture)}" alt="Profile picture" width="48" height="48">` : "None"}</td>
+                <td>${escapeHtml(user.full_name)}</td>
+                <td>${escapeHtml(user.email_id)}</td>
+                <td>${escapeHtml({ M: "Male", F: "Female", O: "Other" }[user.gender] || user.gender)}</td>
+                <td>${Number(user.status) === 1 ? "Active" : "Inactive"}</td>
+              </tr>`;
+          }).join("");
+        });
+    }
 
     $(document).on("click", ".password-toggle", function () {
       const button = $(this);
@@ -401,38 +475,35 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
         return;
       }
 
-      // Add and edit both call this page through AJAX.
+      // Step 4: Stop normal form navigation and send the form with jQuery AJAX.
       event.preventDefault();
-      fetch(form.action, {
+      $.ajax({
+        url: form.action,
         method: "POST",
-        body: new FormData(form)
+        data: new FormData(form),
+        processData: false,
+        contentType: false,
+        dataType: "json"
       })
-        .then(function (response) {
-          return response.text().then(function (text) {
-            try {
-              return { ok: response.ok, data: JSON.parse(text) };
-            } catch (error) {
-              return { ok: false, data: { message: text || (isEditMode ? "Unable to update user." : "Unable to add user.") } };
-            }
-          });
-        })
-        .then(function (result) {
-          if (!result.ok || !result.data.success) {
-            throw new Error(result.data.message || (isEditMode ? "Unable to update user." : "Unable to add user."));
+        .then(function (data) {
+          if (!data.success) {
+            throw new Error(data.message || (isEditMode ? "Unable to update user." : "Unable to add user."));
           }
-          showToast(result.data.message, false);
+          // Step 7: The server has saved the change and returned success JSON.
+          showToast(data.message, false);
           bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).hide();
           form.reset();
+          return refreshUsers();
         })
-        .catch(function (error) {
-          showToast(error.message, true);
+        .catch(function (xhr) {
+          showToast(xhr.responseJSON?.message || xhr.message || (isEditMode ? "Unable to update user." : "Unable to add user."), true);
         });
     });
 
   </script>
 
    <?php if (isset($_GET['deleted']) && $_GET['deleted'] === '1'): ?> 
-    <p id="delete-message" style="color: green;">User deleted successfully.</p>
+    <p id="delete-message" style="color: green;">User deleted successfully2.</p>
     <script>
       setTimeout(function () {
         const deleteMessage = document.getElementById('delete-message');
@@ -448,8 +519,7 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
   <?php endif; ?>
   <br>
 
-  <?php if (mysqli_num_rows($users) > 0): ?>
-  <div class="container"><br><br>
+  <div class="container" id="users-list"><br><br>
     <h2>List of Users</h2>
     <table class="table">
       <thead>
@@ -463,16 +533,12 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
     
         </tr>
       </thead>
-      <tbody>
+      <tbody id="users-tbody">
         <?php while ($user = mysqli_fetch_assoc($users)): ?>
-          <tr>
+          <tr data-user-id="<?= (int) $user['id'] ?>">
             <td>
               <button type="button" class="btn btn-primary btn-sm edit-user-button"
-                data-id="<?= (int) $user['id'] ?>"
-                data-full-name="<?= escape($user['full_name']) ?>"
-                data-email="<?= escape($user['email_id']) ?>"
-                data-gender="<?= escape($user['gender']) ?>"
-                data-status="<?= (int) $user['status'] ?>">Edit</button>
+                data-id="<?= (int) $user['id'] ?>">Edit</button>
               <form action="<?= escape($ajaxEndpoint) ?>" method="POST" data-action="delete" style="display: inline;">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
@@ -495,7 +561,6 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
       </tbody>
     </table>
   </div>
-  <?php endif; ?>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
@@ -522,8 +587,12 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
       window.history.replaceState({}, document.title, errorCleanUrl.pathname + errorCleanUrl.search);
     <?php endif; ?>
 
-    document.querySelectorAll("form[data-action='delete']").forEach(function (form) {
-      form.addEventListener("submit", function (event) {
+    document.addEventListener("submit", function (event) {
+      const form = event.target.closest("form[data-action='delete']");
+      if (!form) {
+        return;
+      }
+
         event.preventDefault();
         if (!confirm("Are you sure to delete this user?")) {
           return;
@@ -550,35 +619,58 @@ $ajaxEndpoint = $_SERVER['SCRIPT_NAME'];
               throw new Error(result.data.message || "Unable to delete user.");
             }
 
-            form.closest("tr").remove();
-            showToast(result.data.message);
+            return refreshUsers().then(function () {
+              showToast(result.data.message);
+            });
           })
           .catch(function (error) {
             showToast(error.message, true);
           });
-      });
     });
 
-    document.querySelectorAll('.edit-user-button').forEach(function (button) {
-      button.addEventListener('click', function () {
-        const form = $("#registration-form");
-        form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
-        $("#userModalLabel").text("Edit User");
-        $("#registration-form input[type='submit']").val("Update");
-        $("#form-mode").val("1"); // 1 = Edit: id present, form pre-filled with existing data
-        $("#edit-id").val(button.dataset.id);
-        $("#full_name").val(button.dataset.fullName);
-        $("#email").val(button.dataset.email);
-        $("#gender").val(button.dataset.gender);
-        $("#pwd, #confirm_password").val("").attr("type", "password");
-        $("#active").prop("checked", button.dataset.status === "1");
-        $("#inactive").prop("checked", button.dataset.status === "0");
-        $(".password-toggle").removeClass("fa-eye-slash").addClass("fa-eye");
-        clear_errors();
-        bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).show();
-      });
+    document.addEventListener('click', function (event) {
+      // Step 1: Find out whether the user clicked an Edit button.
+      const button = event.target.closest('.edit-user-button');
+      if (!button) {
+        return;
+      }
+
+        // Step 2: Request the selected user's data as JSON.
+        const userUrl = new URL(<?= json_encode($ajaxEndpoint) ?>, window.location.href);
+        userUrl.searchParams.set('action', 'get_user');
+        userUrl.searchParams.set('id', button.dataset.id);
+
+        fetch(userUrl)
+          .then(function (response) {
+            return response.json().then(function (data) {
+              if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to load user.');
+              }
+              return data.user;
+            });
+          })
+          .then(function (user) {
+            // Step 3: Put the JSON values into the edit modal.
+            const form = $("#registration-form");
+            form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
+            $("#userModalLabel").text("Edit User");
+            $("#registration-form input[type='submit']").val("Update");
+            $("#form-mode").val("1");
+            $("#edit-id").val(user.id);
+            $("#full_name").val(user.full_name);
+            $("#email").val(user.email_id);
+            $("#gender").val(user.gender);
+            $("#pwd, #confirm_password").val("").attr("type", "password");
+            $("#active").prop("checked", Number(user.status) === 1);
+            $("#inactive").prop("checked", Number(user.status) === 0);
+            $(".password-toggle").removeClass("fa-eye-slash").addClass("fa-eye");
+            clear_errors();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).show();
+          })
+          .catch(function (error) {
+            showToast(error.message, true);
+          });
     });
   </script>
 </body>
-       
 </html>

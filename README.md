@@ -65,31 +65,117 @@ The application uses the `users` table with these important fields:
 
 ## Project Files
 
-- `index.php`: registration form, user list, JavaScript validation, edit modal, and same-page actions
-- `ajax.php`: creates a user
-- `edit.php`: updates a user
-- `ajax.php`: handles add, edit, and soft-delete requests
+- `index.php`: registration form, user list, JavaScript validation, edit modal, and AJAX calls
+- `ajax.php`: JSON API for listing, reading, adding, editing, and soft-deleting users
 - `connection.php`: MySQL connection and image-upload helper
 - `database.sql`: database migrations
 - `uploads/`: uploaded profile pictures
 
-## CRUD Flow
+## AJAX Workflow
 
-### Create
+`index.php` uses `ajax.php` as the single JSON endpoint. The page initially renders the table with PHP, and JavaScript refreshes the complete table after every successful add, edit, or delete.
 
-The registration form sends data to `ajax.php` using JavaScript `fetch()`.
+```mermaid
+sequenceDiagram
+      participant User
+      participant Browser as index.php JavaScript
+      participant API as ajax.php
+      participant DB as MySQL
 
-### Read
+      User->>Browser: Click Edit
+      Browser->>API: GET ajax.php?action=get_user&id=12
+      API->>DB: SELECT active user by id
+      DB-->>API: User row
+      API-->>Browser: JSON {success:true,user:{...}}
+      Browser->>Browser: Fill the modal form
 
-`index.php` displays users where `is_deleted = 0`.
+      User->>Browser: Submit edited form
+      Browser->>API: POST FormData (id + fields + optional file)
+      API->>API: Validate fields and upload
+      API->>DB: UPDATE users ... WHERE id=12
+      API-->>Browser: JSON {success:true,message:"User updated successfully."}
+      Browser->>API: GET ajax.php?action=list_users
+      API->>DB: SELECT active users ORDER BY id DESC
+      DB-->>API: Current user rows
+      API-->>Browser: JSON {success:true,users:[...]}
+      Browser->>Browser: Replace the complete table body
+```
 
-### Update
+### 1. Opening the edit form
 
-Clicking **Edit** opens a modal. The form submits the changes to `edit.php`.
+Each row has an `.edit-user-button` containing the user ID. The delegated click handler creates this request:
 
-### Delete
+```text
+GET ajax.php?action=get_user&id=12
+```
 
-Clicking **Delete** sends a background POST request to `ajax.php`. The record is kept in the database and marked with `is_deleted = 1`.
+`ajax.php` validates the ID, queries a non-deleted user, and returns:
+
+```json
+{
+   "success": true,
+   "user": {
+      "id": 12,
+      "full_name": "Example User",
+      "email_id": "user@example.com",
+      "gender": "M",
+      "status": 1,
+      "profile_picture": "uploads/example.jpg"
+   }
+}
+```
+
+The browser reads `data.user`, puts its values into the modal inputs, sets `form-mode` to edit, and shows the modal. The password fields remain blank because a password is never returned by the API.
+
+### 2. Adding or editing a user
+
+When the modal is submitted, JavaScript first performs client-side validation. If it passes, `event.preventDefault()` stops a normal page navigation and `fetch()` sends a `POST` request to `ajax.php` with `new FormData(form)`.
+
+- No `id` means add mode.
+- An `id` means edit mode.
+- `action` is omitted, so `ajax.php` treats the request as save.
+- The file input is included in the multipart `FormData` request.
+
+The API validates the request again on the server. It inserts a new row in add mode or updates the existing row in edit mode. Success returns JSON such as:
+
+```json
+{"success":true,"message":"User updated successfully."}
+```
+
+Validation failures return HTTP `422` with `success: false`, a combined `message`, and an `errors` array. The browser displays the message in the error toast.
+
+### 3. Refreshing the complete table
+
+After a successful save, the browser calls:
+
+```text
+GET ajax.php?action=list_users
+```
+
+The API selects every user where `is_deleted = 0`, ordered by newest ID first, and returns:
+
+```json
+{"success":true,"users":[{"id":12,"full_name":"Example User"}]}
+```
+
+`refreshUsers()` converts that array into table rows and replaces the entire `#users-tbody` HTML. This keeps the table synchronized with the database instead of changing only the row that was edited.
+
+### 4. Deleting a user
+
+The delete form sends a separate POST request with an explicit action:
+
+```text
+POST ajax.php
+action=delete&id=12
+```
+
+`ajax.php` checks that the user exists, then performs a soft delete by setting `is_deleted = 1`. It returns:
+
+```json
+{"success":true,"message":"User deleted successfully."}
+```
+
+The browser then calls the same `list_users` endpoint and replaces the complete table body. The deleted row disappears because it is no longer returned by the `is_deleted = 0` query.
 
 ## Password Warning
 

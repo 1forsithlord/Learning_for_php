@@ -426,27 +426,26 @@ $ajaxEndpoint = 'ajax.php';
           throw new Error(data.message || "Unable to refresh users.");
         }
         return data.users;
-        })
-        .then(function (users) {
-          document.getElementById("users-tbody").innerHTML = users.map(function (user) {
-            return `
-              <tr data-user-id="${escapeHtml(user.id)}">
-                <td>
-                  <button type="button" class="btn btn-primary btn-sm edit-user-button" data-id="${escapeHtml(user.id)}">Edit</button>
-                  <form action="<?= escape($ajaxEndpoint) ?>" method="POST" data-action="delete" style="display: inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="id" value="${escapeHtml(user.id)}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                  </form>
-                </td>
-                <td>${user.profile_picture ? `<img src="${escapeHtml(user.profile_picture)}" alt="Profile picture" width="48" height="48">` : "None"}</td>
-                <td>${escapeHtml(user.full_name)}</td>
-                <td>${escapeHtml(user.email_id)}</td>
-                <td>${escapeHtml({ M: "Male", F: "Female", O: "Other" }[user.gender] || user.gender)}</td>
-                <td>${Number(user.status) === 1 ? "Active" : "Inactive"}</td>
-              </tr>`;
-          }).join("");
-        });
+      }).then(function (users) {
+        document.getElementById("users-tbody").innerHTML = users.map(function (user) {
+          return `
+            <tr data-user-id="${escapeHtml(user.id)}">
+              <td>
+                <button type="button" class="btn btn-primary btn-sm edit-user-button" data-id="${escapeHtml(user.id)}">Edit</button>
+                <form action="<?= escape($ajaxEndpoint) ?>" method="POST" data-action="delete" style="display: inline;">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="id" value="${escapeHtml(user.id)}">
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+              </td>
+              <td>${user.profile_picture ? `<img src="${escapeHtml(user.profile_picture)}" alt="Profile picture" width="48" height="48">` : "None"}</td>
+              <td>${escapeHtml(user.full_name)}</td>
+              <td>${escapeHtml(user.email_id)}</td>
+              <td>${escapeHtml({ M: "Male", F: "Female", O: "Other" }[user.gender] || user.gender)}</td>
+              <td>${Number(user.status) === 1 ? "Active" : "Inactive"}</td>
+            </tr>`;
+        }).join("");
+      });
     }
 
     $(document).on("click", ".password-toggle", function () {
@@ -598,33 +597,25 @@ $ajaxEndpoint = 'ajax.php';
           return;
         }
 
-        fetch(<?= json_encode($ajaxEndpoint) ?>, {
+        $.ajax({
+          url: <?= json_encode($ajaxEndpoint) ?>,
           method: "POST",
-          body: new FormData(form)
+          data: new FormData(form),
+          processData: false,
+          contentType: false,
+          dataType: "json"
         })
-          .then(function (response) {
-            return response.text().then(function (text) {
-              try {
-                return { ok: response.ok, data: JSON.parse(text) };
-              } catch (error) {
-                return {
-                  ok: false,
-                  data: { message: text || "Unable to delete user." }
-                };
-              }
-            });
-          })
-          .then(function (result) {
-            if (!result.ok || !result.data.success) {
-              throw new Error(result.data.message || "Unable to delete user.");
+          .then(function (data) {
+            if (!data.success) {
+              throw new Error(data.message || "Unable to delete user.");
             }
 
             return refreshUsers().then(function () {
-              showToast(result.data.message);
+              showToast(data.message);
             });
           })
-          .catch(function (error) {
-            showToast(error.message, true);
+          .catch(function (xhr) {
+            showToast(xhr.responseJSON?.message || xhr.message || "Unable to delete user.", true);
           });
     });
 
@@ -640,14 +631,16 @@ $ajaxEndpoint = 'ajax.php';
         userUrl.searchParams.set('action', 'get_user');
         userUrl.searchParams.set('id', button.dataset.id);
 
-        fetch(userUrl)
-          .then(function (response) {
-            return response.json().then(function (data) {
-              if (!response.ok || !data.success) {
-                throw new Error(data.message || 'Unable to load user.');
-              }
-              return data.user;
-            });
+        $.ajax({
+          url: userUrl.toString(),
+          method: 'GET',
+          dataType: 'json'
+        })
+          .then(function (data) {
+            if (!data.success) {
+              throw new Error(data.message || 'Unable to load user.');
+            }
+            return data.user;
           })
           .then(function (user) {
             // Step 3: Put the JSON values into the edit modal.
@@ -667,8 +660,8 @@ $ajaxEndpoint = 'ajax.php';
             clear_errors();
             bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).show();
           })
-          .catch(function (error) {
-            showToast(error.message, true);
+          .catch(function (xhr) {
+            showToast(xhr.responseJSON?.message || xhr.message || 'Unable to load user.', true);
           });
     });
   </script>

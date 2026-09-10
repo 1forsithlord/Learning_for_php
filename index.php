@@ -462,8 +462,8 @@ $ajaxEndpoint = 'ajax.php';
       }
     });
 
-    $("#registration-form").on("submit", function (event) {
-      const form = this;
+    function handleRegistrationSubmit(event) {//button click event handler for the registration form submission
+      const form = event.currentTarget;
       const mode = $("#form-mode").val(); // 0/1 for add and edit
       const isEditMode = mode === "1";
 
@@ -497,7 +497,9 @@ $ajaxEndpoint = 'ajax.php';
         .catch(function (xhr) {
           showToast(xhr.responseJSON?.message || xhr.message || (isEditMode ? "Unable to update user." : "Unable to add user."), true);
         });
-    });
+    }
+
+    $("#registration-form").on("submit", handleRegistrationSubmit);
 
   </script>
 

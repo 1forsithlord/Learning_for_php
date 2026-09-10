@@ -75,6 +75,55 @@ The application uses the `users` table with these important fields:
 
 `index.php` uses `ajax.php` as the single JSON endpoint. The page initially renders the table with PHP, and JavaScript refreshes the complete table after every successful add, edit, or delete.
 
+### Complete User Management Workflow
+
+```mermaid
+flowchart TD
+   A[Page loads] --> B[index.php loads users]
+   B --> C[Display users table]
+
+   C --> D{User action}
+
+   D -->|Click Add User| E[Open empty modal]
+   E --> F[Fill registration form]
+   F --> G[Click Add or submit form]
+
+   D -->|Click Edit| H[JavaScript requests user data]
+   H --> I[ajax.php returns JSON]
+   I --> J[Fill modal with user data]
+   J --> K[Edit form values]
+   K --> L[Click Update or submit form]
+
+   G --> M[handleRegistrationSubmit]
+   L --> M
+
+   M --> N[Client-side validation]
+   N -->|Invalid| O[Show error toast]
+   O --> F
+
+   N -->|Valid| P[jQuery $.ajax POST]
+   P --> Q[Server validates data in PHP]
+   Q -->|Invalid| R[Return JSON error]
+   R --> O
+
+   Q -->|Add| S[INSERT user into users table]
+   Q -->|Update| T[UPDATE user in users table]
+
+   S --> U[Return success JSON]
+   T --> U
+
+   U --> V[Close modal and show success toast]
+   V --> W[Refresh user list with $.ajax]
+   W --> C
+
+   D -->|Click Delete| X[Show confirmation]
+   X -->|Cancel| C
+   X -->|Confirm| Y[Send delete request with $.ajax]
+   Y --> Z[Set is_deleted = 1]
+   Z --> AA[Return success JSON]
+   AA --> W
+```
+
 ```mermaid
 sequenceDiagram
       participant User
@@ -129,7 +178,7 @@ The browser reads `data.user`, puts its values into the modal inputs, sets `form
 
 ### 2. Adding or editing a user
 
-When the modal is submitted, JavaScript first performs client-side validation. If it passes, `event.preventDefault()` stops a normal page navigation and `fetch()` sends a `POST` request to `ajax.php` with `new FormData(form)`.
+When the modal is submitted, JavaScript first performs client-side validation. If it passes, `event.preventDefault()` stops a normal page navigation and jQuery `$.ajax()` sends a `POST` request to `ajax.php` with `new FormData(form)`.
 
 - No `id` means add mode.
 - An `id` means edit mode.

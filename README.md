@@ -11,6 +11,8 @@ A simple PHP and MySQL user-listing application demonstrating CRUD operations.
 - JavaScript and PHP validation
 - Prepared MySQL statements
 - JPG and PNG uploads up to 1 MB
+- A default user icon when no profile picture is stored
+- Square profile thumbnails with click-to-open full-image preview
 - Same-page success messages and delete toast
 - Search by full name, email, gender, and status with dropdown filtering for predefined values
 
@@ -90,6 +92,17 @@ Example:
 - Gender filter: `male` returns only male users
 - Status filter: `inactive` returns only inactive users
 
+## Profile Pictures
+
+Profile pictures are uploaded to `uploads/` and the database stores their relative path in
+`profile_picture`. Only JPG and PNG files up to 1 MB are accepted. The table displays each
+picture as a square thumbnail. Clicking a thumbnail opens the full image in an overlay; the
+overlay can be closed with the close button, by clicking outside the image, or by pressing
+Escape.
+
+When `profile_picture` is `NULL` or empty, the table displays a default user icon instead of
+the text `None`.
+
 ## AJAX Workflow
 
 `index.php` uses `ajax.php` as the single JSON endpoint. The page initially renders the table with PHP, and JavaScript refreshes the complete table after every successful add, edit, or delete.
@@ -123,7 +136,7 @@ flowchart TD
    J --> K[Edit form values]
    K --> L[Click Update or submit form]
 
-   G --> M[handleRegistrationSubmit]
+   G --> M[handleUserSave]
    L --> M
 
    M --> N[Client-side validation]
@@ -245,7 +258,7 @@ The API selects every user where `is_deleted = 0`, ordered by newest ID first, a
 {"success":true,"users":[{"id":12,"full_name":"Example User"}]}
 ```
 
-`refreshUsers()` converts that array into table rows and replaces the entire `#users-tbody` HTML. This keeps the table synchronized with the database instead of changing only the row that was edited.
+`refreshUsers()` converts that array into table rows and replaces the entire `#users-showbody` HTML. This keeps the table synchronized with the database instead of changing only the row that was edited.
 
 ### 4. Deleting a user
 
@@ -280,8 +293,6 @@ PHP syntax can be checked with:
 
 ```bash
 php -l index.php
-php -l ajax.php
-php -l edit.php
 php -l ajax.php
 php -l connection.php
 ```

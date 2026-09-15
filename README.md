@@ -118,9 +118,9 @@ flowchart TD
 
    D -->|Search users| D1[Enter filters: name, email, gender, status]
    D1 --> D2[Click Search button]
-   D2 --> D3[refreshUsers() reads filters]
-   D3 --> D4[GET ajax.php?action=list_users&...]
-   D4 --> D5[ajax.php get_users() builds query]
+   D2 --> D3["refreshUsers() reads filters"]
+   D3 --> D4["GET ajax.php?action=list_users&..."]
+   D4 --> D5["ajax.php get_users() builds query"]
    D5 --> D6[Return matching users as JSON]
    D6 --> D7[JavaScript filters client-side again]
    D7 --> D8[Rebuild table body with matching rows]
@@ -136,14 +136,14 @@ flowchart TD
    J --> K[Edit form values]
    K --> L[Click Update or submit form]
 
-   G --> M[handleUserSave]
+   G --> M["handleUserSave"]
    L --> M
 
    M --> N[Client-side validation]
    N -->|Invalid| O[Show error toast]
    O --> F
 
-   N -->|Valid| P[jQuery $.ajax POST]
+   N -->|Valid| P["jQuery $.ajax POST"]
    P --> Q[Server validates data in PHP]
    Q -->|Invalid| R[Return JSON error]
    R --> O
@@ -155,12 +155,12 @@ flowchart TD
    T --> U
 
    U --> V[Close modal and show success toast]
-   V --> W[Refresh user list with $.ajax]
+   V --> W["Refresh user list with $.ajax"]
    W --> C
 
    D -->|Click Delete| X[Show confirmation]
    X -->|Cancel| C
-   X -->|Confirm| Y[Send delete request with $.ajax]
+   X -->|Confirm| Y["Send delete request with $.ajax"]
    Y --> Z[Set is_deleted = 1]
    Z --> AA[Return success JSON]
    AA --> W

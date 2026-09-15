@@ -203,9 +203,10 @@ if ($mode === 'edit') {
 
 try {
     if ($mode === 'add') {
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $profilePicture = upload_profile_picture($file);
         $statement = mysqli_prepare($conn, 'INSERT INTO users (full_name, email_id, gender, password, status, profile_picture) VALUES (?, ?, ?, ?, ?, ?)');
-        mysqli_stmt_bind_param($statement, 'ssssis', $fullName, $email, $gender, $password, $status, $profilePicture);
+        mysqli_stmt_bind_param($statement, 'ssssis', $fullName, $email, $gender, $hashedPassword, $status, $profilePicture);
         mysqli_stmt_execute($statement);
         mysqli_stmt_close($statement);
         json_response(['success' => true, 'message' => 'User added successfully.']);
@@ -222,7 +223,7 @@ try {
     if ($password !== '') {
         $fields[] = 'password = ?';
         $types .= 's';
-        $params[] = $password;
+        $params[] = password_hash($password, PASSWORD_DEFAULT);
     }
     if ($profilePicture !== null) {
         $fields[] = 'profile_picture = ?';

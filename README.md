@@ -277,15 +277,15 @@ action=delete&id=12
 
 The browser then calls the same `list_users` endpoint and replaces the complete table body. The deleted row disappears because it is no longer returned by the `is_deleted = 0` query.
 
-## Password Warning
+## Password Security
 
-The current code temporarily stores passwords as plain text because password hashing was removed during development. Before using this project outside local testing, restore password hashing with:
+New passwords and passwords changed during user edits are stored with PHP's
+`password_hash($password, PASSWORD_DEFAULT)` function. The application does not return
+password values through the API.
 
-```php
-$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-```
-
-Store `$hashedPassword` instead of `$password` in the database.
+Any users created before password hashing was enabled may still have plain-text passwords in
+the database. Reset those passwords or migrate them before using the application outside local
+development.
 
 ## Validation
 

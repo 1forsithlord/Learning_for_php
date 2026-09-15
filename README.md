@@ -39,13 +39,15 @@ A simple PHP and MySQL user-listing application demonstrating CRUD operations.
    http://localhost/phpmyadmin
    ```
 
-4. Select the existing `User listing` database.
+4. Create or select the MySQL database named `User Listing`.
 
-5. Run the migration statements in `database.sql`.
+5. Import the schema from `User_Listing.sql` to create the `users` table.
 
-6. Make sure the `uploads` directory exists and is writable by Apache.
+6. If you are using the older migration file, you can also run the statements in `database.sql`.
 
-7. Open the application:
+7. Make sure the `uploads` directory exists and is writable by Apache.
+
+8. Open the application:
 
    ```text
    http://localhost/Learning_for_php/index.php
@@ -53,7 +55,7 @@ A simple PHP and MySQL user-listing application demonstrating CRUD operations.
 
 ## Database
 
-The application uses the `users` table with these important fields:
+The application expects a MySQL database named `User Listing` with a `users` table. The schema is provided in `User_Listing.sql` and includes the key fields below:
 
 - `id`: primary key
 - `full_name`: user name
@@ -64,14 +66,15 @@ The application uses the `users` table with these important fields:
 - `profile_picture`: uploaded image path
 - `is_deleted`: `0` for visible or `1` for soft-deleted
 
-`database.sql` contains migrations for the existing table. It does not create a new database or table.
+`User_Listing.sql` creates the database table structure for the project. `database.sql` is also included as a supplementary migration script.
 
 ## Project Files
 
 - `index.php`: registration form, user list, JavaScript validation, edit modal, and AJAX calls
 - `ajax.php`: JSON API for listing, reading, adding, editing, and soft-deleting users
 - `connection.php`: MySQL connection and image-upload helper
-- `database.sql`: database migrations
+- `User_Listing.sql`: primary database schema for the `User Listing` database
+- `database.sql`: supplemental migration script
 - `uploads/`: uploaded profile pictures
 
 ## Search Filtering

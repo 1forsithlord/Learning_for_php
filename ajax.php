@@ -20,16 +20,51 @@ function get_user_by_id($conn, $id)
     return $user ?: null;
 }
 
-function get_users($conn)
+function get_users($conn, $nameSearch = '', $emailSearch = '', $genderSearch = '', $statusSearch = '')
 {
-    $result = mysqli_query($conn, 'SELECT id, full_name, email_id, gender, status, profile_picture FROM users WHERE is_deleted = 0 ORDER BY id DESC');
-    if (!$result) {
+    if ($genderSearch !== '') {
+        $genderSearch = strtolower(trim((string) $genderSearch));
+        $genderSearch = ['m' => 'male', 'f' => 'female', 'o' => 'other'][$genderSearch] ?? $genderSearch;
+    }
+
+    if ($statusSearch !== '') {
+        $statusSearch = strtolower(trim((string) $statusSearch));
+        $statusSearch = ['1' => 'active', '0' => 'inactive', 'active' => 'active', 'inactive' => 'inactive'][$statusSearch] ?? $statusSearch;
+    }
+
+    $query = "SELECT id, full_name, email_id, gender, status, profile_picture
+        FROM users
+        WHERE is_deleted = 0
+        AND (? = '' OR LOWER(full_name) LIKE LOWER(CONCAT( ? , '%')))
+        AND (? = '' OR LOWER(email_id) LIKE LOWER(CONCAT('%', ?, '%')))
+        AND (? = '' OR LOWER(CASE gender WHEN 'M' THEN 'male' WHEN 'F' THEN 'female' WHEN 'O' THEN 'other' END) LIKE LOWER(CONCAT('%', ?, '%')))
+        AND (? = '' OR LOWER(CASE status WHEN 1 THEN 'active' ELSE 'inactive' END) LIKE LOWER(CONCAT('%', ?, '%')))
+        ORDER BY id DESC";
+    $statement = mysqli_prepare($conn, $query);
+    if (!$statement) {
         json_response(['success' => false, 'message' => 'Unable to load users.'], 500);
     }
+
+    mysqli_stmt_bind_param(
+        $statement,
+        'ssssssss',
+        $nameSearch,
+        $nameSearch,
+        $emailSearch,
+        $emailSearch,
+        $genderSearch,
+        $genderSearch,
+        $statusSearch,
+        $statusSearch
+    );
+
+    mysqli_stmt_execute($statement);
+    $result = mysqli_stmt_get_result($statement);
     $users = [];
     while ($user = mysqli_fetch_assoc($result)) {
         $users[] = $user;
     }
+    mysqli_stmt_close($statement);
     return $users;
 }
 
@@ -99,7 +134,6 @@ function validate_user_input($conn, $mode, $id)
         } else {
             $fileInfo = finfo_open(FILEINFO_MIME_TYPE);
             $mimeType = finfo_file($fileInfo, $file['tmp_name']);
-            finfo_close($fileInfo);
             if (!in_array($mimeType, ['image/jpeg', 'image/png'], true)) {
                 $errors[] = 'Only JPG and PNG pictures are allowed.';
             }
@@ -118,7 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         json_response($user ? ['success' => true, 'user' => $user] : ['success' => false, 'message' => 'User not found.'], $user ? 200 : 404);
     }
     if ($action === 'list_users') {
-        json_response(['success' => true, 'users' => get_users($conn)]);
+        $nameSearch = trim((string) ($_GET['name'] ?? ''));
+        $emailSearch = trim((string) ($_GET['email'] ?? ''));
+        $genderSearch = trim((string) ($_GET['gender'] ?? ''));
+        $statusSearch = trim((string) ($_GET['status'] ?? ''));
+        json_response(['success' => true, 'users' => get_users($conn, $nameSearch, $emailSearch, $genderSearch, $statusSearch)]);
     }
     json_response(['success' => false, 'message' => 'Unknown action.'], 400);
 }
@@ -145,6 +183,22 @@ $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
 [$errors, $fullName, $email, $gender, $password, $status, $file] = validate_user_input($conn, $mode, $id);
 if ($errors) {
     json_response(['success' => false, 'message' => implode("\n", $errors), 'errors' => $errors], 422);
+}
+
+if ($mode === 'edit') {
+    $currentUser = get_user_by_id($conn, $id);
+    $hasNewProfilePicture = $file !== null && $file['error'] === UPLOAD_ERR_OK;
+    $hasChanges = $currentUser
+        && ($currentUser['full_name'] !== $fullName
+            || $currentUser['email_id'] !== $email
+            || $currentUser['gender'] !== $gender
+            || (int) $currentUser['status'] !== $status
+            || $password !== ''
+            || $hasNewProfilePicture);
+
+    if (!$hasChanges) {
+        json_response(['success' => true, 'changed' => false]);
+    }
 }
 
 try {

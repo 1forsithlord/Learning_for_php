@@ -12,6 +12,7 @@ A simple PHP and MySQL user-listing application demonstrating CRUD operations.
 - Prepared MySQL statements
 - JPG and PNG uploads up to 1 MB
 - Same-page success messages and delete toast
+- Search by full name, email, gender, and status with dropdown filtering for predefined values
 
 ## Requirements
 
@@ -71,6 +72,24 @@ The application uses the `users` table with these important fields:
 - `database.sql`: database migrations
 - `uploads/`: uploaded profile pictures
 
+## Search Filtering
+
+The user table includes a filter bar with:
+
+- text search for full name
+- text search for email
+- dropdown for gender (`Male`, `Female`, `Other`)
+- dropdown for status (`Active`, `Inactive`)
+
+The name and email inputs support partial matching, while the gender and status dropdowns use exact matching so only the requested value is returned.
+
+Example:
+
+- Full name filter: `ali` matches `Alice`
+- Email filter: `gmail` matches `test@gmail.com`
+- Gender filter: `male` returns only male users
+- Status filter: `inactive` returns only inactive users
+
 ## AJAX Workflow
 
 `index.php` uses `ajax.php` as the single JSON endpoint. The page initially renders the table with PHP, and JavaScript refreshes the complete table after every successful add, edit, or delete.
@@ -83,6 +102,16 @@ flowchart TD
    B --> C[Display users table]
 
    C --> D{User action}
+
+   D -->|Search users| D1[Enter filters: name, email, gender, status]
+   D1 --> D2[Click Search button]
+   D2 --> D3[refreshUsers() reads filters]
+   D3 --> D4[GET ajax.php?action=list_users&...]
+   D4 --> D5[ajax.php get_users() builds query]
+   D5 --> D6[Return matching users as JSON]
+   D6 --> D7[JavaScript filters client-side again]
+   D7 --> D8[Rebuild table body with matching rows]
+   D8 --> C
 
    D -->|Click Add User| E[Open empty modal]
    E --> F[Fill registration form]
@@ -130,6 +159,15 @@ sequenceDiagram
       participant Browser as index.php JavaScript
       participant API as ajax.php
       participant DB as MySQL
+
+      User->>Browser: Enter name/email or select gender/status and click Search
+      Browser->>Browser: getUserFilters() reads all active filters
+      Browser->>API: GET ajax.php?action=list_users&name=...&email=...&gender=...&status=...
+      API->>API: get_users() normalizes gender/status values and applies WHERE filters
+      API->>DB: SELECT non-deleted users with matching conditions
+      DB-->>API: Matching user rows
+      API-->>Browser: JSON {success:true,users:[...]}
+      Browser->>Browser: Apply exact checks for dropdown values and rebuild the table body
 
       User->>Browser: Click Edit
       Browser->>API: GET ajax.php?action=get_user&id=12

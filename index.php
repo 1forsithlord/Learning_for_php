@@ -1,217 +1,6 @@
 <?php
 require 'connection.php';
 
-function get_user_by_id($conn, $id)
-{
-  $statement = mysqli_prepare($conn, 'SELECT id, full_name, email_id, gender, status, profile_picture FROM users WHERE id = ? AND is_deleted = 0');
-  mysqli_stmt_bind_param($statement, 'i', $id);
-  mysqli_stmt_execute($statement);
-  $user = mysqli_fetch_assoc(mysqli_stmt_get_result($statement));
-  mysqli_stmt_close($statement);
-
-  return $user ?: null;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'get_user') {
-  $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
-  $user = $id ? get_user_by_id($conn, $id) : null;
-
-  if (!$user) {
-    http_response_code(404);
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'User not found.']);
-    exit;
-  }
-
-  header('Content-Type: application/json');
-  echo json_encode(['success' => true, 'user' => $user]);
-  exit;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $action = $_POST['action'] ?? 'save';
-
-  if ($action === 'delete') {
-    $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
-
-    if (!$id) {
-      http_response_code(422);
-      header('Content-Type: application/json');
-      echo json_encode(['success' => false, 'message' => 'Invalid user ID.']);
-      exit;
-    }
-
-    $select = mysqli_prepare($conn, 'SELECT id FROM users WHERE id = ? AND is_deleted = 0');
-    mysqli_stmt_bind_param($select, 'i', $id);
-    mysqli_stmt_execute($select);
-    $user = mysqli_fetch_assoc(mysqli_stmt_get_result($select));
-    mysqli_stmt_close($select);
-
-    if (!$user) {
-      http_response_code(422);
-      header('Content-Type: application/json');
-      echo json_encode(['success' => false, 'message' => 'User not found.']);
-      exit;
-    }
-
-    $delete = mysqli_prepare($conn, 'UPDATE users SET is_deleted = 1 WHERE id = ?');
-    mysqli_stmt_bind_param($delete, 'i', $id);
-    mysqli_stmt_execute($delete);
-    mysqli_stmt_close($delete);
-
-    header('Content-Type: application/json');
-    echo json_encode(['success' => true, 'message' => 'User deleted successfully.3']);
-    exit;
-  }
-
-  $errors = [];
-  //Ternary Operator
-  // if id is set and not empty then mode is edit else add
-  $mode = (isset($_POST['id']) && $_POST['id'] !== '') ? 'edit' : 'add';
-  // Null Coalescing Operator
-  $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
-
-  if ($mode === 'edit') {
-    if (!$id) {
-      $errors[] = 'Invalid user ID.';
-    } else {
-      $checkStatement = mysqli_prepare($conn, 'SELECT id FROM users WHERE id = ? AND is_deleted = 0');
-      mysqli_stmt_bind_param($checkStatement, 'i', $id);
-      mysqli_stmt_execute($checkStatement);
-      $userExists = mysqli_stmt_get_result($checkStatement)->num_rows > 0;
-      mysqli_stmt_close($checkStatement);
-
-      if (!$userExists) {
-        $errors[] = 'User not found.';
-      }
-    }
-  }
-
-  $fullNameInput = $_POST['full-name'] ?? null;
-  $fullName = is_string($fullNameInput) ? trim($fullNameInput) : '';
-  if ($fullName === '') {
-    $errors[] = 'Full Name is required.';
-  } elseif (strlen($fullName) > 100) {
-    $errors[] = 'Name must be under 100 characters.';
-  }
-
-  $emailInput = $_POST['email'] ?? null;
-  $email = is_string($emailInput) ? trim($emailInput) : '';
-  if ($email === '') {
-    $errors[] = 'Email is required.';
-  } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $errors[] = 'Enter a valid email address.';
-  }
-
-  $genderInput = $_POST['gender'] ?? null;
-  $gender = is_string($genderInput) ? $genderInput : '';
-  if (!in_array($gender, ['M', 'F', 'O'], true)) {
-    $errors[] = 'Gender is required.';
-  }
-
-  $passwordInput = $_POST['pwd'] ?? null;
-  $password = is_string($passwordInput) ? $passwordInput : '';
-  if ($mode === 'add' && $password === '') {
-    $errors[] = 'Password is required.';
-  } elseif ($password !== '' && (strlen($password) < 6 || strlen($password) > 20 || !preg_match('/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/', $password))) {
-    $errors[] = 'Use uppercase, lowercase, a number, and a special character.';
-  }
-
-  $confirmPasswordInput = $_POST['confirm_password'] ?? null;
-  $confirmPassword = is_string($confirmPasswordInput) ? $confirmPasswordInput : '';
-  if ($mode === 'add' && $confirmPassword === '') {
-    $errors[] = 'Confirm Password is required.';
-  } elseif ($password !== '' && $confirmPassword === '') {
-    $errors[] = 'Confirm Password is required.';
-  } elseif ($password !== '' && $password !== $confirmPassword) {
-    $errors[] = 'Passwords do not match.';
-  }
-
-  $statusInput = $_POST['status'] ?? null;
-  $status = is_scalar($statusInput) ? filter_var($statusInput, FILTER_VALIDATE_INT) : false;
-  if (!in_array($status, [0, 1], true)) {
-    $errors[] = 'Status is required.';
-  }
-
-  $file = $_FILES['myfile'] ?? null;
-  if ($file !== null && $file['error'] !== UPLOAD_ERR_NO_FILE) {
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-      $errors[] = 'Unable to upload the profile picture.';
-    } elseif ($file['size'] > 1024 * 1024) {
-      $errors[] = 'Profile picture must be smaller than 1 MB.';
-    } else {
-      $fileInfo = finfo_open(FILEINFO_MIME_TYPE);
-      $mimeType = finfo_file($fileInfo, $file['tmp_name']);
-      finfo_close($fileInfo);
-
-      if (!in_array($mimeType, ['image/jpeg', 'image/png'], true)) {
-        $errors[] = 'Only JPG and PNG pictures are allowed.';
-      }
-    }
-  }
-
-  if ($errors) {
-    http_response_code(422);
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => implode("\n", $errors), 'errors' => $errors]);
-    exit;
-  }
-
-  try {
-    if ($mode === 'add') {
-      $profilePicture = upload_profile_picture($file);
-      $statement = mysqli_prepare($conn, 'INSERT INTO users (full_name, email_id, gender, password, status, profile_picture) VALUES (?, ?, ?, ?, ?, ?)');
-      mysqli_stmt_bind_param($statement, 'ssssis', $fullName, $email, $gender, $password, $status, $profilePicture);
-      mysqli_stmt_execute($statement);
-      mysqli_stmt_close($statement);
-      $id = mysqli_insert_id($conn);
-      $savedUser = get_user_by_id($conn, $id);
-
-      header('Content-Type: application/json');
-      echo json_encode(['success' => true, 'message' => 'User added successfully.', 'user' => $savedUser]);
-      exit;
-    }
-
-    $profilePicture = null;
-    if ($file !== null && $file['error'] === UPLOAD_ERR_OK) {
-      $profilePicture = upload_profile_picture($file);
-    }
-
-    $fields = ['full_name = ?', 'email_id = ?', 'gender = ?', 'status = ?'];
-    $types = 'sssi';
-    $params = [$fullName, $email, $gender, $status];
-
-    if ($password !== '') {
-      $fields[] = 'password = ?';
-      $types .= 's';
-      $params[] = $password;
-    }
-
-    if ($profilePicture !== null) {
-      $fields[] = 'profile_picture = ?';
-      $types .= 's';
-      $params[] = $profilePicture;
-    }
-
-    $types .= 'i';
-    $params[] = $id;
-    $statement = mysqli_prepare($conn, 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?');
-    mysqli_stmt_bind_param($statement, $types, ...$params);
-    mysqli_stmt_execute($statement);
-    mysqli_stmt_close($statement);
-    $savedUser = get_user_by_id($conn, $id);
-  } catch (Throwable $error) {
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Unable to save user.']);
-    exit;
-  }
-
-  header('Content-Type: application/json');
-  echo json_encode(['success' => true, 'message' => 'User updated successfully.', 'user' => $savedUser]);
-  exit;
-}
-
 $users = mysqli_query($conn, 'SELECT id, full_name, email_id, gender, status, profile_picture FROM users WHERE is_deleted = 0 ORDER BY id DESC');
 if (!$users) {
     die('Unable to load users: ' . mysqli_error($conn));
@@ -232,7 +21,6 @@ $ajaxEndpoint = 'ajax.php';
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-  <link rel = "stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
  <style>
     #registration-wrapper {
       font-size: 13px;
@@ -241,6 +29,21 @@ $ajaxEndpoint = 'ajax.php';
   #show-register-form {
     margin-left: 5%;
   }
+
+    #user-filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+
+    #user-filters input {
+      max-width: 180px;
+    }
+
+    #search-users-button {
+      white-space: nowrap;
+    }
 
     #toast-message {
       position: fixed;
@@ -254,12 +57,75 @@ $ajaxEndpoint = 'ajax.php';
       border-radius: 4px;
       white-space: pre-line;
     }
+
+    .profile-picture,
+    .profile-placeholder {
+      display: inline-flex;
+      width: 48px;
+      height: 48px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      vertical-align: middle;
+    }
+
+    .profile-picture {
+      object-fit: cover;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    }
+
+    .profile-placeholder {
+      color: #6c757d;
+      background: #e9ecef;
+      border: 2px solid #dee2e6;
+    }
+
+    #profile-picture-viewer {
+      position: fixed;
+      inset: 0;
+      z-index: 1060;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, 0.78);
+    }
+
+    #profile-picture-viewer.is-visible {
+      display: flex;
+    }
+
+    #profile-picture-viewer-image {
+      max-width: min(90vw, 900px);
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+    }
+
+    #close-profile-picture-viewer {
+      position: absolute;
+      top: 18px;
+      right: 24px;
+      color: #fff;
+      background: transparent;
+      border: 0;
+      font-size: 2rem;
+      line-height: 1;
+      cursor: pointer;
+    }
 </style>
 </head>
 
 <body>
 
   <div id="toast-message" role="status"></div>
+
+  <div id="profile-picture-viewer" role="dialog" aria-modal="true" aria-label="Profile picture preview">
+    <button type="button" id="close-profile-picture-viewer" aria-label="Close profile picture preview">&times;</button>
+    <img id="profile-picture-viewer-image" src="" alt="">
+  </div>
 
  <div style="margin-top: 20px; margin-bottom: 20px;">
     <button type="button" id="show-register-form" class="btn btn-primary">Add User</button>
@@ -268,7 +134,7 @@ $ajaxEndpoint = 'ajax.php';
   <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <form id="registration-form" action="<?= escape($ajaxEndpoint) ?>" method="POST" enctype="multipart/form-data" novalidate>
+        <form id="registration-form" action="" method="POST" enctype="multipart/form-data" novalidate>
           <div class="modal-header">
             <h3 class="modal-title" id="userModalLabel">Registration Form</h3>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -332,8 +198,8 @@ $ajaxEndpoint = 'ajax.php';
             <label for="inactive">Inactive</label>
             <br><br>
 
-            <input type="submit" value="Add">
-            <input type="reset" value="Clear" onclick="clear_errors();">
+            <button type="button" id="save-user-button" class="btn btn-secondary btn-sm" onclick="handleUserSave(event)">Add</button>
+            <button type="reset" class="btn btn-secondary btn-sm" onclick="clear_errors();">Clear</button>
           </div>
         </form>
       </div>
@@ -348,7 +214,7 @@ $ajaxEndpoint = 'ajax.php';
       $("#form-mode").val("0"); // 0 = Add: no id, blank form
       form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
       $("#userModalLabel").text("Registration Form");
-      $("#registration-form input[type='submit']").val("Add");
+      $("#save-user-button").text("Add");
       clear_errors();
       bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).show();
     });
@@ -414,12 +280,35 @@ $ajaxEndpoint = 'ajax.php';
         .replace(/'/g, "&#039;");
     }
 
+    function getUserFilters() {
+      return {
+        name: $("#name-search").val().trim(),
+        email: $("#email-search").val().trim(),
+        gender: $("#gender-search").val().trim(),
+        status: $("#status-search").val().trim()
+      };
+    }
+
+    function normalizeGenderValue(value) {
+      const normalized = String(value ?? "").toLowerCase();
+      return ({ m: "male", f: "female", o: "other", male: "male", female: "female", other: "other" }[normalized] || normalized);
+    }
+
+    function normalizeStatusValue(value) {
+      const normalized = String(value ?? "").toLowerCase();
+      return ({ "1": "active", "0": "inactive", active: "active", inactive: "inactive" }[normalized] || normalized);
+    }
+
     function refreshUsers() {
       // Step 8: Get the latest users and rebuild the whole table.
+      const filters = getUserFilters();
       return $.ajax({
         url: <?= json_encode($ajaxEndpoint) ?>,
         method: "GET",
-        data: { action: "list_users" },
+        data: {
+          action: "list_users",
+          ...filters
+        },
         dataType: "json"
       }).then(function (data) {
         if (!data.success) {
@@ -427,7 +316,20 @@ $ajaxEndpoint = 'ajax.php';
         }
         return data.users;
       }).then(function (users) {
-        document.getElementById("users-tbody").innerHTML = users.map(function (user) {
+        // Step 8.1: Search users using the current filter values before rebuilding the table.
+        const matchingUsers = users.filter(function (user) {
+          const gender = normalizeGenderValue(user.gender);
+          const status = normalizeStatusValue(user.status);
+
+          return (!filters.name || String(user.full_name).toLowerCase().includes(filters.name.toLowerCase()))
+            && (!filters.email || String(user.email_id).toLowerCase().includes(filters.email.toLowerCase()))
+            && (!filters.gender || gender === filters.gender.toLowerCase())
+            && (!filters.status || status === filters.status.toLowerCase());
+        });
+
+        document.getElementById("users-showbody").innerHTML = matchingUsers.length === 0
+          ? '<tr><td colspan="6"><p>User not found</p></td></tr>'
+          : matchingUsers.map(function (user) {
           return `
             <tr data-user-id="${escapeHtml(user.id)}">
               <td>
@@ -438,15 +340,38 @@ $ajaxEndpoint = 'ajax.php';
                   <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
               </td>
-              <td>${user.profile_picture ? `<img src="${escapeHtml(user.profile_picture)}" alt="Profile picture" width="48" height="48">` : "None"}</td>
+              <td>${user.profile_picture ? `<img class="profile-picture" src="${escapeHtml(user.profile_picture)}" alt="Profile picture" width="48" height="48" tabindex="0">` : '<span class="profile-placeholder" role="img" aria-label="No profile picture"><i class="fa-solid fa-user" aria-hidden="true"></i></span>'}</td>
               <td>${escapeHtml(user.full_name)}</td>
               <td>${escapeHtml(user.email_id)}</td>
               <td>${escapeHtml({ M: "Male", F: "Female", O: "Other" }[user.gender] || user.gender)}</td>
               <td>${Number(user.status) === 1 ? "Active" : "Inactive"}</td>
             </tr>`;
-        }).join("");
+          }).join("");
       });
     }
+
+    $(document).on("click", "#search-users-button", function () {
+      refreshUsers();
+    });
+
+    $(document).on("click", ".profile-picture", function () {
+      $("#profile-picture-viewer-image").attr("src", this.src).attr("alt", this.alt);
+      $("#profile-picture-viewer").addClass("is-visible");
+    });
+
+    $(document).on("click", "#close-profile-picture-viewer, #profile-picture-viewer", function (event) {
+      if (event.target.id === "profile-picture-viewer" || event.target.id === "close-profile-picture-viewer") {
+        $("#profile-picture-viewer").removeClass("is-visible");
+        $("#profile-picture-viewer-image").attr("src", "");
+      }
+    });
+
+    $(document).on("keydown", function (event) {
+      if (event.key === "Escape") {
+        $("#profile-picture-viewer").removeClass("is-visible");
+        $("#profile-picture-viewer-image").attr("src", "");
+      }
+    });
 
     $(document).on("click", ".password-toggle", function () {
       const button = $(this);
@@ -462,12 +387,12 @@ $ajaxEndpoint = 'ajax.php';
       }
     });
 
-    function handleRegistrationSubmit(event) {//button click event handler for the registration form submission
-      const form = event.currentTarget;
+    function handleUserSave(event) {
+      const form = event.currentTarget.closest("form");
       const mode = $("#form-mode").val(); // 0/1 for add and edit
       const isEditMode = mode === "1";
-
-      form.action = <?= json_encode($ajaxEndpoint) ?>;
+   
+ 
 
       if (!validateForm(isEditMode)) {
         event.preventDefault();
@@ -477,7 +402,7 @@ $ajaxEndpoint = 'ajax.php';
       // Step 4: Stop normal form navigation and send the form with jQuery AJAX.
       event.preventDefault();
       $.ajax({
-        url: form.action,
+        url: <?= json_encode($ajaxEndpoint) ?>,
         method: "POST",
         data: new FormData(form),
         processData: false,
@@ -485,6 +410,11 @@ $ajaxEndpoint = 'ajax.php';
         dataType: "json"
       })
         .then(function (data) {
+          if (data.changed === false) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("userModal")).hide();
+            form.reset();
+            return;
+          }
           if (!data.success) {
             throw new Error(data.message || (isEditMode ? "Unable to update user." : "Unable to add user."));
           }
@@ -498,8 +428,6 @@ $ajaxEndpoint = 'ajax.php';
           showToast(xhr.responseJSON?.message || xhr.message || (isEditMode ? "Unable to update user." : "Unable to add user."), true);
         });
     }
-
-    $("#registration-form").on("submit", handleRegistrationSubmit);
 
   </script>
 
@@ -522,6 +450,22 @@ $ajaxEndpoint = 'ajax.php';
 
   <div class="container" id="users-list"><br><br>
     <h2>List of Users</h2>
+    <div id="user-filters">
+      <input type="search" id="name-search" placeholder=" Full Name">
+      <input type="search" id="email-search" placeholder=" Email ID">
+      <select id="gender-search" class="form-select form-select-sm" style="max-width: 180px;">
+        <option value=""> Gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+      <select id="status-search" class="form-select form-select-sm" style="max-width: 180px;">
+        <option value="">Status</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <button type="button" id="search-users-button" class="btn btn-secondary btn-sm">Search</button>
+    </div>
     <table class="table">
       <thead>
         <tr>
@@ -531,10 +475,9 @@ $ajaxEndpoint = 'ajax.php';
           <th>Email ID</th>
           <th>Gender</th>
           <th>Status</th>
-    
         </tr>
       </thead>
-      <tbody id="users-tbody">
+      <tbody id="users-showbody">
         <?php while ($user = mysqli_fetch_assoc($users)): ?>
           <tr data-user-id="<?= (int) $user['id'] ?>">
             <td>
@@ -548,9 +491,11 @@ $ajaxEndpoint = 'ajax.php';
             </td>
             <td>
               <?php if (!empty($user['profile_picture'])): ?>
-                <img src="<?= escape($user['profile_picture']) ?>" alt="Profile picture" width="48" height="48">
+                <img class="profile-picture" src="<?= escape($user['profile_picture']) ?>" alt="Profile picture" width="48" height="48" tabindex="0">
               <?php else: ?>
-                None
+                <span class="profile-placeholder" role="img" aria-label="No profile picture">
+                  <i class="fa-solid fa-user" aria-hidden="true"></i>
+                </span>
               <?php endif; ?>
             </td>
             <td><?= escape($user['full_name']) ?></td>
@@ -647,9 +592,9 @@ $ajaxEndpoint = 'ajax.php';
           .then(function (user) {
             // Step 3: Put the JSON values into the edit modal.
             const form = $("#registration-form");
-            form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
+            // form.attr("action", <?= json_encode($ajaxEndpoint) ?>);
             $("#userModalLabel").text("Edit User");
-            $("#registration-form input[type='submit']").val("Update");
+            $("#save-user-button").text("Update");
             $("#form-mode").val("1");
             $("#edit-id").val(user.id);
             $("#full_name").val(user.full_name);
@@ -669,3 +614,4 @@ $ajaxEndpoint = 'ajax.php';
   </script>
 </body>
 </html>
+  
